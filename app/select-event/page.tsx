@@ -83,7 +83,6 @@ export default function SelectEventPage() {
         .select('events(id, title, date)')
         .eq('user_id', userId)
 
-
       if (guestError) {
         console.error('❌ Error fetching guest events:', guestError)
         setFetchError(true)
@@ -108,13 +107,17 @@ export default function SelectEventPage() {
     router.push(path)
   }
 
-  if (loading) return <div className="p-6 text-center">Loading events...</div>
-  if (fetchError)
+  if (loading) {
+    return <div className="p-6 text-center">Loading events...</div>
+  }
+
+  if (fetchError) {
     return (
       <div className="p-6 text-center text-red-600">
         ⚠️ There was a problem loading your events. Please try again later.
       </div>
     )
+  }
 
   return (
     <div className="p-6 space-y-8">
@@ -123,7 +126,7 @@ export default function SelectEventPage() {
 
       {hostedEvents.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mb-2">Events You're Hosting</h2>
+          <h2 className="text-lg font-semibold mb-2">Events You&apos;re Hosting</h2>
           <ul className="space-y-2">
             {hostedEvents.map((event) => (
               <li key={event.id}>
@@ -141,7 +144,7 @@ export default function SelectEventPage() {
 
       {guestEvents.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mt-4 mb-2">Events You're Attending</h2>
+          <h2 className="text-lg font-semibold mt-4 mb-2">Events You&apos;re Attending</h2>
           <ul className="space-y-2">
             {guestEvents.map((event) => (
               <li key={event.id}>
@@ -158,7 +161,9 @@ export default function SelectEventPage() {
       )}
 
       {hostedEvents.length === 0 && guestEvents.length === 0 && (
-        <div className="text-gray-500">You haven't joined or created any events yet.</div>
+        <div className="text-gray-500">
+          You haven&apos;t joined or created any events yet.
+        </div>
       )}
     </div>
   )
