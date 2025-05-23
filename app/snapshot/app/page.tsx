@@ -1,1 +1,0 @@
-<strong>{guest.full_name}</strong> – {guest.rsvp_status} 
