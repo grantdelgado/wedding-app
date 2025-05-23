@@ -20,6 +20,7 @@ export default function SelectEventPage() {
   const [guestEvents, setGuestEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
   useEffect(() => {
     const seedDebugEvent = async (userId: string) => {
@@ -131,8 +132,8 @@ export default function SelectEventPage() {
             {hostedEvents.map((event) => (
               <li key={event.id}>
                 <button
+                  className={`w-full text-left px-4 py-2 rounded hover:bg-gray-100 ${selectedEventId === event.id ? 'bg-gray-200' : ''}`}
                   onClick={() => handleSelect(event.id, 'host')}
-                  className="w-full p-3 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
                 >
                   {event.title} (Host)
                 </button>
@@ -149,8 +150,8 @@ export default function SelectEventPage() {
             {guestEvents.map((event) => (
               <li key={event.id}>
                 <button
+                  className={`w-full text-left px-4 py-2 rounded hover:bg-gray-100 ${selectedEventId === event.id ? 'bg-gray-200' : ''}`}
                   onClick={() => handleSelect(event.id, 'guest')}
-                  className="w-full p-3 rounded bg-purple-600 text-white hover:bg-purple-700 transition"
                 >
                   {event.title} (Guest)
                 </button>

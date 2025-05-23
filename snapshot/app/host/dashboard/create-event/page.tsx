@@ -61,13 +61,13 @@ export default function HostDashboard() {
 
       {event ? (
         <div className="border p-4 rounded bg-gray-100">
-          <h2 className="text-xl font-semibold mb-2">{event.name}</h2>
+          <h2 className="text-xl font-semibold mb-2">{event.title}</h2>
           <p className="text-gray-700">📍 {event.location}</p>
           <p className="text-gray-700">📅 {event.date}</p>
         </div>
       ) : (
         <div>
-          <p className="mb-4 text-gray-600">You haven’t created your wedding yet.</p>
+          <p className="mb-4 text-gray-600">You haven't created your wedding yet.</p>
           <button
             className="bg-blue-600 text-white px-4 py-2 rounded"
             onClick={() => router.push('/host/event/create')}
