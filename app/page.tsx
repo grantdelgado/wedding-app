@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/reference/supabase.types'
+
+type Guest = Database['public']['Tables']['guests']['Row']
 
 export default function Home() {
   const [guests, setGuests] = useState<Guest[]>([])
