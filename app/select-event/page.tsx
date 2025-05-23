@@ -23,6 +23,7 @@ export default function SelectEventPage() {
 
   useEffect(() => {
     const seedDebugEvent = async (userId: string) => {
+      if (process.env.NODE_ENV !== 'development') return;
       const { data: existing } = await supabase
         .from('events')
         .select('id')

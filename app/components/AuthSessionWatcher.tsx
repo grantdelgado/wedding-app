@@ -1,22 +1,26 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function AuthSessionWatcher({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    const init = async () => {
-      console.log('🔁 Starting Supabase session check...')
+    // Only redirect if NOT on /reset-password (with or without query params), /login, or /profile
+    if (
+      pathname.startsWith('/reset-password') ||
+      pathname === '/login' ||
+      pathname === '/profile'
+    ) return;
 
+    const init = async () => {
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession()
-
-      console.log('📦 Session data:', session)
 
       if (sessionError) {
         console.error('❌ Error fetching session:', sessionError)
@@ -24,19 +28,16 @@ export default function AuthSessionWatcher({ children }: { children: React.React
       }
 
       if (!session?.user) {
-        console.warn('⚠️ No user session found')
         return
       }
 
-      // ✅ Auth session is valid — but user creation/upsert should be handled elsewhere
-      // 🔁 TODO: move user upsert logic to a Supabase trigger or Edge Function
+      // ✅ Auth session is valid — user creation/upsert is now handled by a Supabase trigger or Edge Function
 
       router.push('/select-event')
-      return
     }
 
     init()
-  }, [router])
+  }, [router, pathname])
 
   return <>{children}</>
 }

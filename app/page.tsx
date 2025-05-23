@@ -1,16 +1,9 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-
-type Guest = {
-  id: string
-  name: string
-  email: string
-  rsvp: string
-  tag: string
-}
+import { useGuests } from '@/lib/useGuests'
+import type { Database } from '@/reference/supabase.types'
 
 export default function Home() {
   const [guests, setGuests] = useState<Guest[]>([])

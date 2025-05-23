@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Unveil – Wedding Communication & Memory Platform
 
-## Getting Started
+Unveil is a modern, mobile-first app designed to help couples communicate effortlessly with their wedding guests, stay organized across their wedding weekend, and preserve shared memories for years to come. It’s built for hosts and guests alike—with real-time messaging, media sharing, and a post-wedding time capsule experience.
 
-First, run the development server:
+This project is being developed as a clean, production-grade MVP and will be tested live at the creator’s own wedding.
+
+---
+
+## ✨ Core Purpose
+
+Unveil simplifies wedding communication and memory sharing—before, during, and after the event. Hosts can send updates, manage schedules, and collect media. Guests can stay informed, upload photos, and revisit memories over time.
+
+---
+
+## 🧱 Tech Stack
+
+| Layer           | Tool/Framework        | Purpose                              |
+|----------------|------------------------|--------------------------------------|
+| Frontend       | Next.js (App Router)   | Core application framework           |
+| Styling        | Tailwind CSS           | Utility-first responsive design      |
+| UI Components  | shadcn/ui              | Reusable, modern component library   |
+| Backend        | Supabase (PostgreSQL)  | DB, Auth, Storage, RLS               |
+| Deployment     | Vercel                 | Hosting & CI/CD                      |
+| IDE            | Cursor                 | AI-powered coding workflow           |
+| Design         | Figma + Untitled UI    | Visual design system                 |
+| Project Mgmt   | Notion                 | Roadmap, tasks, and logs             |
+
+---
+
+## 🧑‍🤝‍🧑 User Roles
+
+- **Hosts**: Create and manage an event, invite guests, send segmented messages, and view uploaded media.
+- **Guests**: Join a wedding, receive updates, view the schedule, upload photos/videos, and revisit shared memories.
+
+---
+
+## ✅ MVP Feature Set
+
+| Feature                 | Description                                                   |
+|------------------------|---------------------------------------------------------------|
+| Guest List & Tagging   | Import, manage, and segment guests                            |
+| Schedule & Itinerary   | Share a timeline of events with notifications                 |
+| Messaging              | Send push/email messages to all or specific guest groups      |
+| Media Upload & Gallery | Guests can upload + browse media by event/day                |
+| Post-Wedding Capsule   | Send curated recaps or messages on anniversaries              |
+
+---
+
+## 🗂 Reference Folder
+
+The `/reference` folder contains the system’s architectural snapshot:
+
+- `schema.sql` – Current Supabase schema (exported via CLI)
+- `supabase.types.ts` – Generated TypeScript types from Supabase
+- `session-log.md` – Daily build logs of what changed and why
+- `decisions.md` – Structural/product decisions with rationale
+- `questions.md` – Open questions for review or debugging
+
+Run `./bin/snapshot.sh` to generate a zipped daily snapshot.
+
+---
+
+## 🧠 Architecture
+
+- Each user may be a **Host** for one or more events, and a **Guest** for others.
+- Core tables include: `users`, `events`, `guests`, `messages`, `media`
+- Supabase RLS enforces role-based data access and event-specific permissions
+- The app is modular, with clean separation of concerns across `/app`, `/components`, `/lib`, and `/types`
+
+---
+
+## 🛠 Setup Instructions (Local Dev)
 
 ```bash
+git clone https://github.com/[your-username]/unveil-app
+cd unveil-app
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.local.example .env.local
+# Fill in Supabase credentials + Vercel URL
+
+# Run the dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+📸 Creating a Snapshot (Schema + Code)
+bash
+Copy
+Edit
+./bin/snapshot.sh
+Creates:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+/reference/schema.sql
 
-## Learn More
+/reference/supabase.types.ts
 
-To learn more about Next.js, take a look at the following resources:
+snapshot-latest.zip (codebase + reference files)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Upload this zip for feedback, validation, or handoff.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+🔒 Status
+This is an active MVP in development. Testing will be done live at an upcoming wedding. Feedback loops are tightly integrated with Notion and AI-based code auditing.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+👋 About the Builder
+This app is being built by a solo founder/product manager with strong PM fundamentals and AI-accelerated build workflows. It’s designed to be easily handed off to a future CTO or dev partner—with clean architecture, typed schema, and clear documentation from the start.

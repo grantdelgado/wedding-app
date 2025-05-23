@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthSessionWatcher from './components/AuthSessionWatcher'
+import AuthenticatedLogout from './components/AuthenticatedLogout';
+import ProfileAvatar from './components/ProfileAvatar';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,6 +29,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthSessionWatcher>
+          <div className="absolute top-4 right-4 z-50">
+            <ProfileAvatar />
+          </div>
           {children}
         </AuthSessionWatcher>
       </body>

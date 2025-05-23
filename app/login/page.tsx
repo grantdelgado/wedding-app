@@ -8,24 +8,21 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setMessage('')
-
     const { error } = await supabase.auth.signInWithOtp({ email })
-
     if (error) {
-      setMessage('Error logging in: ' + error.message)
+      setMessage('Error sending magic link: ' + error.message)
     } else {
       setMessage('Check your email for the magic link!')
     }
-
     setIsLoading(false)
   }
 
   return (
-    <form onSubmit={handleLogin} className="p-4 max-w-md mx-auto">
+    <form onSubmit={handleMagicLink} className="p-4 max-w-md mx-auto">
       <h2 className="text-xl font-bold mb-4">Log in</h2>
       <input
         type="email"
