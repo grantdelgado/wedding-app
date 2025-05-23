@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthSessionWatcher from './components/AuthSessionWatcher'
 import ProfileAvatar from './components/ProfileAvatar';
+import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,12 +28,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthSessionWatcher>
-          <div className="absolute top-4 right-4 z-50">
-            <ProfileAvatar />
-          </div>
-          {children}
-        </AuthSessionWatcher>
+        <Suspense>
+          <AuthSessionWatcher>
+            <div className="absolute top-4 right-4 z-50">
+              <ProfileAvatar />
+            </div>
+            {children}
+          </AuthSessionWatcher>
+        </Suspense>
       </body>
     </html>
   );
