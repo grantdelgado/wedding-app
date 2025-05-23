@@ -28,7 +28,7 @@ export default function Home() {
           {guests.map((guest) => (
             <li key={guest.id} className="border-b py-2">
               <strong>{guest.full_name}</strong> – {guest.rsvp_status}
-              <div className="text-sm text-gray-500">{guest.email} • {guest.tag}</div>
+              <div className="text-sm text-gray-500">{guest.email} • {guest.tags && guest.tags.length > 0 ? guest.tags.join(', ') : 'No tags'}</div>
             </li>
           ))}
         </ul>
