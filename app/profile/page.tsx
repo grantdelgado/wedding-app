@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import LogoutButton from '../components/LogoutButton'
 import { useRouter } from 'next/navigation'
 
 export default function ProfilePage() {

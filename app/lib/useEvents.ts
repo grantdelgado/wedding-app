@@ -29,8 +29,8 @@ export function useEvents(userId: string | null) {
         .eq('user_id', userId);
       if (guestError) setError(guestError.message);
       const formatted = (guestData || [])
-        .map((g: any) => g.events)
-        .filter((e: any) => e !== null);
+        .map((g: { events: Database['public']['Tables']['events']['Row'] | null }) => g.events)
+        .filter((e): e is Database['public']['Tables']['events']['Row'] => e !== null);
       setGuestEvents(formatted);
       setLoading(false);
     }
