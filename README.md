@@ -1,8 +1,8 @@
 # Unveil – Wedding Communication & Memory Platform
 
-Unveil is a modern, mobile-first app designed to help couples communicate effortlessly with their wedding guests, stay organized across their wedding weekend, and preserve shared memories for years to come. It’s built for hosts and guests alike—with real-time messaging, media sharing, and a post-wedding time capsule experience.
+Unveil is a modern, mobile-first app designed to help couples communicate effortlessly with their wedding guests, stay organized across their wedding weekend, and preserve shared memories for years to come. It's built for hosts and guests alike—with real-time messaging, media sharing, and a post-wedding time capsule experience.
 
-This project is being developed as a clean, production-grade MVP and will be tested live at the creator’s own wedding.
+This project is being developed as a clean, production-grade MVP and will be tested live at the creator's own wedding.
 
 ---
 
@@ -48,7 +48,7 @@ Unveil simplifies wedding communication and memory sharing—before, during, and
 
 ## 🗂 Reference Folder
 
-The `/reference` folder contains the system’s architectural snapshot:
+The `/reference` folder contains the system's architectural snapshot:
 
 - `schema.sql` – Current Supabase schema (exported via CLI)
 - `supabase.types.ts` – Generated TypeScript types from Supabase
@@ -56,7 +56,8 @@ The `/reference` folder contains the system’s architectural snapshot:
 - `decisions.md` – Structural/product decisions with rationale
 - `questions.md` – Open questions for review or debugging
 
-Run `./bin/snapshot.sh` to generate a zipped daily snapshot.
+🔒 Status
+This is an active MVP in development. Testing will be done live at an upcoming wedding. Feedback loops are tightly integrated with Notion and AI-based code auditing.
 
 ---
 
@@ -84,25 +85,10 @@ cp .env.local.example .env.local
 
 # Run the dev server
 npm run dev
+```
 
+---
 
-📸 Creating a Snapshot (Schema + Code)
-bash
-Copy
-Edit
-./bin/snapshot.sh
-Creates:
+## 👋 About the Builder
 
-/reference/schema.sql
-
-/reference/supabase.types.ts
-
-snapshot-latest.zip (codebase + reference files)
-
-Upload this zip for feedback, validation, or handoff.
-
-🔒 Status
-This is an active MVP in development. Testing will be done live at an upcoming wedding. Feedback loops are tightly integrated with Notion and AI-based code auditing.
-
-👋 About the Builder
-This app is being built by a solo founder/product manager with strong PM fundamentals and AI-accelerated build workflows. It’s designed to be easily handed off to a future CTO or dev partner—with clean architecture, typed schema, and clear documentation from the start.
+This app is being built by a solo founder/product manager with strong PM fundamentals and AI-accelerated build workflows. It's designed to be easily handed off to a future CTO or dev partner—with clean architecture, typed schema, and clear documentation from the start.

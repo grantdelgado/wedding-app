@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useEvents } from '@/app/lib/useEvents'
 
 type Event = {
   id: string
@@ -10,24 +11,39 @@ type Event = {
   date: string | null
 }
 
-type GuestEventRecord = {
-  events: Event | null
-}
-
 export default function SelectEventPage() {
   const router = useRouter()
-  const [hostedEvents, setHostedEvents] = useState<Event[]>([])
-  const [guestEvents, setGuestEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  
+  useEffect(() => {
+    const getSession = async () => {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
+        console.error('❌ Error getting session:', sessionError)
+        router.push('/login')
+        return
+      }
+      setCurrentUserId(session.user.id)
+    }
+    getSession()
+  }, [router])
+
+  const { hostedEvents, guestEvents, loading, error: fetchError } = useEvents(currentUserId)
 
   useEffect(() => {
     const seedDebugEvent = async (userId: string) => {
       if (process.env.NODE_ENV !== 'development') return;
+      if (!userId || loading) return;
+
       const { data: existing } = await supabase
         .from('events')
         .select('id')
         .eq('title', '🛠️ Debug Test Event')
+        .eq('host_id', userId)
 
       if (!existing?.length) {
         const { data: newEvent } = await supabase
@@ -51,54 +67,10 @@ export default function SelectEventPage() {
       }
     }
 
-    const run = async () => {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError || !session?.user) {
-        console.error('❌ Error getting session:', sessionError)
-        setFetchError(true)
-        return
-      }
-
-      const userId = session.user.id
-
-      await seedDebugEvent(userId)
-
-      const { data: hostData, error: hostError } = await supabase
-        .from('events')
-        .select('id, title, date')
-        .eq('host_id', userId)
-
-      if (hostError) {
-        console.error('❌ Error fetching hosted events:', hostError)
-        setFetchError(true)
-      } else {
-        setHostedEvents(hostData || [])
-      }
-
-      const { data: guestData, error: guestError } = await supabase
-        .from('guests')
-        .select('events(id, title, date)')
-        .eq('user_id', userId)
-
-      if (guestError) {
-        console.error('❌ Error fetching guest events:', guestError)
-        setFetchError(true)
-      } else {
-        const formatted = (guestData as unknown as GuestEventRecord[] || [])
-          .filter((g): g is { events: Event } => g.events !== null)
-          .map((g) => g.events)
-        setGuestEvents(formatted)
-      }
-
-      setLoading(false)
+    if (currentUserId) {
+      seedDebugEvent(currentUserId)
     }
-
-    run()
-  }, [])
+  }, [currentUserId, loading, hostedEvents, guestEvents])
 
   const handleSelect = (eventId: string, role: 'host' | 'guest') => {
     const path =
@@ -115,21 +87,24 @@ export default function SelectEventPage() {
   if (fetchError) {
     return (
       <div className="p-6 text-center text-red-600">
-        ⚠️ There was a problem loading your events. Please try again later.
+        ⚠️ There was a problem loading your events. Please try again later. Error: {typeof fetchError === 'string' ? fetchError : JSON.stringify(fetchError)}
       </div>
     )
   }
+
+  const validHostedEvents = hostedEvents || [];
+  const validGuestEvents = guestEvents || [];
 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-2xl font-bold">🎉 Welcome to Unveil</h1>
       <p className="text-gray-600">Select an event to continue:</p>
 
-      {hostedEvents.length > 0 && (
+      {validHostedEvents.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-2">Events You&apos;re Hosting</h2>
           <ul className="space-y-2">
-            {hostedEvents.map((event) => (
+            {validHostedEvents.map((event) => (
               <li key={event.id}>
                 <button
                   onClick={() => handleSelect(event.id, 'host')}
@@ -143,11 +118,11 @@ export default function SelectEventPage() {
         </div>
       )}
 
-      {guestEvents.length > 0 && (
+      {validGuestEvents.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mt-4 mb-2">Events You&apos;re Attending</h2>
           <ul className="space-y-2">
-            {guestEvents.map((event) => (
+            {validGuestEvents.map((event) => (
               <li key={event.id}>
                 <button
                   onClick={() => handleSelect(event.id, 'guest')}
@@ -161,7 +136,7 @@ export default function SelectEventPage() {
         </div>
       )}
 
-      {hostedEvents.length === 0 && guestEvents.length === 0 && (
+      {validHostedEvents.length === 0 && validGuestEvents.length === 0 && (
         <div className="text-gray-500">
           You haven&apos;t joined or created any events yet.
         </div>

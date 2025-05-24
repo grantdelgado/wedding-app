@@ -84,16 +84,16 @@ export default function ProfilePage() {
         {message && <p className="mt-2 text-gray-600">{message}</p>}
       </form>
       <div className="p-4 max-w-md mx-auto w-full">
-        <LogoutButtonStyled />
+        <LogoutButtonStyled router={router} />
       </div>
     </div>
   )
 }
 
-function LogoutButtonStyled() {
+function LogoutButtonStyled({ router }: { router: ReturnType<typeof useRouter> }) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    router.push('/login');
   };
   return (
     <button
