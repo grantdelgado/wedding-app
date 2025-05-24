@@ -1,38 +1,46 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import type { Database } from '@/reference/supabase.types'
+import Link from 'next/link'
 
-type Guest = Database['public']['Tables']['guests']['Row']
-
-export default function Home() {
-  const [guests, setGuests] = useState<Guest[]>([])
+export default function HomePage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchGuests = async () => {
-      const { data, error } = await supabase.from('guests').select('*')
-      if (error) console.error(error)
-      else setGuests(data as Guest[])
+    const checkSessionAndRedirect = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.replace('/select-event')
+      } else {
+        setLoading(false)
+      }
     }
-    fetchGuests()
-  }, [])
+    checkSessionAndRedirect()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Loading...</p>
+      </div>
+    )
+  }
 
   return (
-    <main className="p-6">
-      <h1 className="text-3xl font-bold mb-4">Guest List</h1>
-      {guests.length === 0 ? (
-        <p>No guests yet.</p>
-      ) : (
-        <ul className="space-y-2">
-          {guests.map((guest) => (
-            <li key={guest.id} className="border-b py-2">
-              <strong>{guest.full_name}</strong> – {guest.rsvp_status}
-              <div className="text-sm text-gray-500">{guest.email} • {guest.tags && guest.tags.length > 0 ? guest.tags.join(', ') : 'No tags'}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <main className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
+      <h1 className="text-4xl font-bold mb-4">🎉 Welcome to Unveil!</h1>
+      <p className="text-lg text-gray-600 mb-8">
+        Simplify your wedding communication and cherish every moment.
+      </p>
+      <Link
+        href="/login"
+        className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition"
+      >
+        Login / Sign Up
+      </Link>
     </main>
   )
 }
