@@ -96,7 +96,7 @@ export default function SelectEventPage() {
         <h1 className="text-2xl font-bold">🎉 Welcome to Unveil</h1>
       </div>
       
-      <p className="text-gray-600">Select your wedding event to continue, or create a new wedding hub if you're a host.</p>
+      <p className="text-gray-600">Select your wedding event to continue, or create a new wedding hub if you&apos;re a host.</p>
       
       <div className="my-4">
         <Link
