@@ -5,12 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useEvents } from '@/app/lib/useEvents'
 
-type Event = {
-  id: string
-  title: string
-  date: string | null
-}
-
 export default function SelectEventPage() {
   const router = useRouter()
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)

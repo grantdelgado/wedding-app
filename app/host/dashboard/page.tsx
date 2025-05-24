@@ -74,7 +74,7 @@ export default function HostDashboardPage() { // Renamed component for clarity
           </ul>
         ) : (
           <div className="text-center py-8">
-            <p className="text-gray-500 mb-4">You haven't created any events yet.</p>
+            <p className="text-gray-500 mb-4">You haven&apos;t created any events yet.</p>
             <p className="text-gray-500">Why not create one now?</p>
             {/* The "+ New Event" button is already in the header, so might not be needed here again */}
           </div>
