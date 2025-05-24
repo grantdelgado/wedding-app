@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useEvents } from '@/app/lib/useEvents'
+import Link from 'next/link'
 
 export default function SelectEventPage() {
   const router = useRouter()
@@ -90,9 +91,21 @@ export default function SelectEventPage() {
   const validGuestEvents = guestEvents || [];
 
   return (
-    <div className="p-6 space-y-8">
-      <h1 className="text-2xl font-bold">🎉 Welcome to Unveil</h1>
-      <p className="text-gray-600">Select an event to continue:</p>
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">🎉 Welcome to Unveil</h1>
+      </div>
+      
+      <p className="text-gray-600">Select your wedding event to continue, or create a new wedding hub if you're a host.</p>
+      
+      <div className="my-4">
+        <Link
+          href="/host/dashboard/create-event"
+          className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
+        >
+          + Create Your Wedding Hub
+        </Link>
+      </div>
 
       {validHostedEvents.length > 0 && (
         <div>
@@ -102,7 +115,7 @@ export default function SelectEventPage() {
               <li key={event.id}>
                 <button
                   onClick={() => handleSelect(event.id, 'host')}
-                  className="w-full p-3 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                  className="w-full p-3 rounded bg-blue-600 text-white hover:bg-blue-700 transition text-left"
                 >
                   {event.title} (Host)
                 </button>
@@ -120,7 +133,7 @@ export default function SelectEventPage() {
               <li key={event.id}>
                 <button
                   onClick={() => handleSelect(event.id, 'guest')}
-                  className="w-full p-3 rounded bg-purple-600 text-white hover:bg-purple-700 transition"
+                  className="w-full p-3 rounded bg-purple-600 text-white hover:bg-purple-700 transition text-left"
                 >
                   {event.title} (Guest)
                 </button>
@@ -130,9 +143,10 @@ export default function SelectEventPage() {
         </div>
       )}
 
-      {validHostedEvents.length === 0 && validGuestEvents.length === 0 && (
-        <div className="text-gray-500">
-          You haven&apos;t joined or created any events yet.
+      {validHostedEvents.length === 0 && validGuestEvents.length === 0 && !loading && (
+        <div className="text-center py-8">
+            <p className="text-gray-500">You haven&apos;t joined or created any wedding events yet.</p>
+            <p className="text-gray-500">Hosts can get started by creating a wedding hub above.</p>
         </div>
       )}
     </div>
