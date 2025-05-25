@@ -51,7 +51,7 @@ export default function HostDashboardPage() { // Renamed component for clarity
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">👰‍♀️ Host Dashboard</h1>
         <Link
-          href="/host/dashboard/create-event"
+          href="/host/events/create"
           className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
         >
           + New Event

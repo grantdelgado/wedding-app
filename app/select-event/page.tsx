@@ -38,15 +38,15 @@ export default function SelectEventPage() {
         .from('events')
         .select('id')
         .eq('title', '🛠️ Debug Test Event')
-        .eq('host_id', userId)
+        .eq('host_user_id', userId)
 
       if (!existing?.length) {
         const { data: newEvent } = await supabase
           .from('events')
           .insert({
             title: '🛠️ Debug Test Event',
-            date: new Date().toISOString(),
-            host_id: userId,
+            event_date: new Date().toISOString().split('T')[0],
+            host_user_id: userId,
           })
           .select()
           .single()
@@ -100,7 +100,7 @@ export default function SelectEventPage() {
       
       <div className="my-4">
         <Link
-          href="/host/dashboard/create-event"
+          href="/host/events/create"
           className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
         >
           + Create Your Wedding Hub

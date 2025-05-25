@@ -10,10 +10,12 @@ export default function AuthSessionWatcher({ children }: { children: React.React
 
   useEffect(() => {
     // Only redirect if NOT on /reset-password (with or without query params), /login, or /profile
+    // or any paths under /host (which are for authenticated hosts)
     if (
       pathname.startsWith('/reset-password') ||
       pathname === '/login' ||
-      pathname === '/profile'
+      pathname === '/profile' ||
+      pathname.startsWith('/host/')
     ) return;
 
     const init = async () => {
