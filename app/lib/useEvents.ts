@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/reference/supabase.types';
 
-type GuestWithEvent = Database['public']['Tables']['guests']['Row'] & {
+type GuestWithEvent = Database['public']['Tables']['event_guests']['Row'] & {
   events: Database['public']['Tables']['events']['Row'] | null;
 };
 
@@ -22,13 +22,13 @@ export function useEvents(userId: string | null) {
       const { data: hostData, error: hostError } = await supabase
         .from('events')
         .select('*')
-        .eq('host_id', userId);
+        .eq('host_user_id', userId);
       if (hostError) setError(hostError.message);
       setHostedEvents(hostData || []);
 
       // Guest events
       const { data: guestData, error: guestError } = await supabase
-        .from('guests')
+        .from('event_guests')
         .select('*, events:events(*)')
         .eq('user_id', userId);
       if (guestError) setError(guestError.message);
