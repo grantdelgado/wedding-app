@@ -66,7 +66,7 @@ export default function HostDashboardPage() { // Renamed component for clarity
               <li key={event.id} className="p-4 border rounded-lg shadow hover:shadow-md transition">
                 <Link href={`/host/events/${event.id}/dashboard`} className="block">
                   <h3 className="text-lg font-semibold text-blue-700 hover:underline">{event.title}</h3>
-                  {event.date && <p className="text-sm text-gray-600">Date: {new Date(event.date).toLocaleDateString()}</p>}
+                  {event.event_date && <p className="text-sm text-gray-600">Date: {new Date(event.event_date).toLocaleDateString()}</p>}
                   {event.location && <p className="text-sm text-gray-500">Location: {event.location}</p>}
                 </Link>
               </li>
