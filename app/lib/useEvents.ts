@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Database } from '@/reference/supabase.types';
+import type { Database } from '@/app/reference/supabase.types';
 
 type GuestWithEvent = Database['public']['Tables']['event_guests']['Row'] & {
   events: Database['public']['Tables']['events']['Row'] | null;
