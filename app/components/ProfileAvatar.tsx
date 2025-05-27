@@ -1,9 +1,16 @@
 "use client";
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 export default function ProfileAvatar() {
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // Hide profile button on guest event pages and host event pages
+  if (pathname.startsWith('/guest/events/') || pathname.startsWith('/host/events/')) {
+    return null;
+  }
+  
   return (
     <button
       onClick={() => router.push('/profile')}
