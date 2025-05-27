@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/app/reference/supabase.types'
 
@@ -22,11 +22,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
 
-  useEffect(() => {
-    fetchMessages()
-  }, [eventId])
-
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -48,7 +44,11 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId])
+
+  useEffect(() => {
+    fetchMessages()
+  }, [fetchMessages])
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentUserId || sending) return

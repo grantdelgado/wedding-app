@@ -11,7 +11,7 @@ export default function ProfilePage() {
   const [message, setMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [hasHostedEvents, setHasHostedEvents] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
   const router = useRouter()
 
   useEffect(() => {
@@ -27,7 +27,6 @@ export default function ProfilePage() {
         return
       }
       setEmail(user.email || '')
-      setCurrentUserId(user.id)
       setDisplayName(user.user_metadata?.display_name || '')
       
       // Check if user has hosted events

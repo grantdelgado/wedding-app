@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/app/reference/supabase.types'
 
@@ -16,11 +17,7 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
 
-  useEffect(() => {
-    fetchMedia()
-  }, [eventId])
-
-  const fetchMedia = async () => {
+  const fetchMedia = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('media')
@@ -39,7 +36,11 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId])
+
+  useEffect(() => {
+    fetchMedia()
+  }, [fetchMedia])
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -152,12 +153,13 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {media.map((item) => (
             <div key={item.id} className="relative group">
-              <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+              <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
                 {item.media_type === 'image' ? (
-                  <img
+                  <Image
                     src={getMediaUrl(item.storage_path)}
                     alt={item.caption || 'Wedding photo'}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-200"
                   />
                 ) : (
                   <video

@@ -207,7 +207,7 @@ export default function GuestEventHomePage() {
                       : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
                   }`}
                 >
-                  ✅ I'll be there!
+                  ✅ I&apos;ll be there!
                 </button>
                 
                 <button
@@ -229,7 +229,7 @@ export default function GuestEventHomePage() {
                       : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
                   }`}
                 >
-                  ❌ Can't make it
+                  ❌ Can&apos;t make it
                 </button>
               </div>
             </div>

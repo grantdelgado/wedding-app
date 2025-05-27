@@ -155,7 +155,7 @@ export default function SelectEventPage() {
             <h1 className="text-4xl font-bold text-gray-900">Welcome to Unveil</h1>
           </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Select your wedding event to continue, or create a new wedding hub if you're hosting.
+            Select your wedding event to continue, or create a new wedding hub if you&apos;re hosting.
           </p>
         </div>
 
@@ -179,7 +179,7 @@ export default function SelectEventPage() {
             <div>
               <div className="flex items-center mb-6">
                 <div className="text-2xl mr-3">👑</div>
-                <h2 className="text-2xl font-bold text-gray-900">Events You're Hosting</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Events You&apos;re Hosting</h2>
               </div>
               <div className="grid gap-4">
                 {sortedHostedEvents.map((event) => {
@@ -235,7 +235,7 @@ export default function SelectEventPage() {
             <div>
               <div className="flex items-center mb-6">
                 <div className="text-2xl mr-3">🎊</div>
-                <h2 className="text-2xl font-bold text-gray-900">Events You're Attending</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Events You&apos;re Attending</h2>
               </div>
               <div className="grid gap-4">
                 {sortedGuestEvents.map((event) => {
@@ -291,7 +291,7 @@ export default function SelectEventPage() {
             <div className="text-center py-16">
               <div className="text-8xl mb-8">💒</div>
               <h3 className="text-2xl font-bold text-gray-900 mb-4">No Events Yet</h3>
-              <p className="text-lg text-gray-600 mb-2">You haven't joined or created any wedding events yet.</p>
+              <p className="text-lg text-gray-600 mb-2">You haven&apos;t joined or created any wedding events yet.</p>
               <p className="text-gray-500">Get started by creating a wedding hub above!</p>
             </div>
           )}
