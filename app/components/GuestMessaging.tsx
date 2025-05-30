@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/app/reference/supabase.types'
 
@@ -67,7 +67,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
 
       if (error) {
         console.error('❌ Error sending message:', error)
-        alert('Failed to send message. Please try again.')
+        alert('Something went wrong. Please try again.')
         return
       }
 
@@ -75,7 +75,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
       await fetchMessages()
     } catch (err) {
       console.error('❌ Unexpected error sending message:', err)
-      alert('An unexpected error occurred. Please try again.')
+      alert('Something went wrong. Please try again.')
     } finally {
       setSending(false)
     }
@@ -103,41 +103,33 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
     }
   }
 
-  const getMessageTypeIcon = (type: string) => {
-    switch (type) {
-      case 'announcement': return '📢'
-      case 'direct': return '💬'
-      default: return '💭'
-    }
-  }
-
   const getMessageTypeStyle = (type: string, isOwnMessage: boolean) => {
     if (type === 'announcement') {
-      return 'bg-blue-50 border-blue-200 text-blue-900'
+      return 'bg-purple-50 border border-purple-200 text-purple-900'
     }
     
     if (isOwnMessage) {
-      return 'bg-purple-500 text-white ml-auto'
+      return 'bg-stone-800 text-white ml-auto'
     }
     
-    return 'bg-gray-100 text-gray-900'
+    return 'bg-stone-100 text-stone-900'
   }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">💬 Messages</h2>
+      <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+        <h2 className="text-xl font-medium text-stone-800 mb-4">Broadcasts</h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-2"></div>
-          <span className="text-gray-600">Loading messages...</span>
+          <div className="w-6 h-6 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin mr-3"></div>
+          <span className="text-stone-600">Loading broadcasts...</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">💬 Messages</h2>
+    <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+      <h2 className="text-xl font-medium text-stone-800 mb-4">Broadcasts</h2>
 
       {/* Messages List */}
       <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
@@ -151,17 +143,16 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
                 key={message.id}
                 className={`flex ${isOwnMessage && !isAnnouncement ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${getMessageTypeStyle(message.message_type, isOwnMessage)}`}>
+                <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${getMessageTypeStyle(message.message_type, isOwnMessage)}`}>
                   {!isOwnMessage && (
                     <div className="flex items-center mb-1">
-                      <span className="text-xs mr-1">{getMessageTypeIcon(message.message_type)}</span>
-                      <span className="text-xs font-medium">
-                        {message.sender?.full_name || 'Unknown User'}
+                      <span className="text-xs font-medium text-stone-600">
+                        {message.sender?.full_name || 'Someone'}
                       </span>
                     </div>
                   )}
-                  <p className="text-sm">{message.content}</p>
-                  <p className={`text-xs mt-1 ${isOwnMessage ? 'text-purple-200' : 'text-gray-500'}`}>
+                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  <p className={`text-xs mt-2 ${isOwnMessage ? 'text-stone-300' : 'text-stone-500'}`}>
                     {formatMessageTime(message.created_at)}
                   </p>
                 </div>
@@ -170,33 +161,32 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
           })
         ) : (
           <div className="text-center py-8">
-            <div className="text-4xl mb-2">💭</div>
-            <p className="text-gray-600">No messages yet</p>
-            <p className="text-gray-500 text-sm">Start the conversation!</p>
+            <p className="text-stone-600 mb-1">No broadcasts yet—but they'll arrive soon.</p>
+            <p className="text-stone-500 text-sm">Hosts will share updates here.</p>
           </div>
         )}
       </div>
 
       {/* Message Input */}
-      <div className="flex space-x-2">
+      <div className="flex space-x-3">
         <input
           type="text"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="Send a message to everyone..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          placeholder="Share a message with everyone..."
+          className="flex-1 px-4 py-3 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 transition-all"
           disabled={sending || !currentUserId}
         />
         <button
           onClick={sendMessage}
           disabled={!newMessage.trim() || sending || !currentUserId}
-          className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-3 bg-stone-800 text-white rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
         >
           {sending ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            '📤'
+            'Send'
           )}
         </button>
       </div>

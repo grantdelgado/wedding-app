@@ -33,13 +33,29 @@ export default function HostDashboardPage() { // Renamed component for clarity
   const { hostedEvents, loading, error } = useEvents(currentUserId)
 
   if (loading) {
-    return <div className="p-6 text-center">Loading your dashboard...</div>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-stone-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
     return (
-      <div className="p-6 text-center text-red-600">
-        ⚠️ There was a problem loading your dashboard. Please try again later. Error: {typeof error === 'string' ? error : JSON.stringify(error)}
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-8">
+          <h1 className="text-2xl font-semibold text-stone-800 mb-4">Something went wrong</h1>
+          <p className="text-stone-600 mb-6">We couldn't load your dashboard. Please try again.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-stone-800 text-white rounded-lg hover:bg-stone-900 transition-colors font-medium"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     )
   }
@@ -47,39 +63,59 @@ export default function HostDashboardPage() { // Renamed component for clarity
   const validHostedEvents = hostedEvents || [];
 
   return (
-    <main className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">👰‍♀️ Host Dashboard</h1>
-        <Link
-          href="/host/events/create"
-          className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
-        >
-          + New Event
-        </Link>
-      </div>
-
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Your Events</h2>
-        {validHostedEvents.length > 0 ? (
-          <ul className="space-y-3">
-            {validHostedEvents.map((event) => (
-              <li key={event.id} className="p-4 border rounded-lg shadow hover:shadow-md transition">
-                <Link href={`/host/events/${event.id}/dashboard`} className="block">
-                  <h3 className="text-lg font-semibold text-blue-700 hover:underline">{event.title}</h3>
-                  {event.event_date && <p className="text-sm text-gray-600">Date: {new Date(event.event_date).toLocaleDateString()}</p>}
-                  {event.location && <p className="text-sm text-gray-500">Location: {event.location}</p>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-gray-500 mb-4">You haven&apos;t created any events yet.</p>
-            <p className="text-gray-500">Why not create one now?</p>
-            {/* The "+ New Event" button is already in the header, so might not be needed here again */}
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50">
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-semibold text-stone-800 mb-2">Host Dashboard</h1>
+            <p className="text-stone-600">Manage your wedding events and connect with guests</p>
           </div>
-        )}
-      </section>
-    </main>
+          <Link
+            href="/host/events/create"
+            className="inline-flex items-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 transition-all duration-200"
+          >
+            Create New Event
+          </Link>
+        </div>
+
+        <section>
+          <h2 className="text-xl font-medium text-stone-800 mb-6">Your Events</h2>
+          {validHostedEvents.length > 0 ? (
+            <div className="grid gap-4">
+              {validHostedEvents.map((event) => (
+                <div key={event.id} className="bg-white rounded-xl shadow-sm border border-stone-200 p-6 hover:shadow-md transition-all duration-200">
+                  <Link href={`/host/events/${event.id}/dashboard`} className="block">
+                    <h3 className="text-xl font-medium text-stone-800 hover:text-stone-900 transition-colors mb-2">{event.title}</h3>
+                    {event.event_date && (
+                      <p className="text-stone-600 mb-1">
+                        {new Date(event.event_date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    )}
+                    {event.location && <p className="text-stone-500">{event.location}</p>}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <h3 className="text-2xl font-semibold text-stone-800 mb-4">No events yet</h3>
+              <p className="text-stone-600 mb-2">You haven't created any wedding events yet.</p>
+              <p className="text-stone-500 mb-6">Get started by creating your first wedding hub.</p>
+              <Link
+                href="/host/events/create"
+                className="inline-flex items-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 transition-all duration-200"
+              >
+                Create Your First Event
+              </Link>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
   )
 }

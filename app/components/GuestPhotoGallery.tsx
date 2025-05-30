@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import Image from 'next/image'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import Image from 'next/image'
 import type { Database } from '@/app/reference/supabase.types'
 
 type Media = Database['public']['Tables']['media']['Row']
@@ -59,7 +59,7 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
 
       if (uploadError) {
         console.error('❌ Error uploading file:', uploadError)
-        alert('Failed to upload photo. Please try again.')
+        alert('Something went wrong uploading your photo. Please try again.')
         return
       }
 
@@ -76,17 +76,16 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
 
       if (insertError) {
         console.error('❌ Error creating media record:', insertError)
-        alert('Failed to save photo. Please try again.')
+        alert('Something went wrong saving your photo. Please try again.')
         return
       }
 
       // Refresh media list
       await fetchMedia()
-      alert('Photo uploaded successfully!')
 
     } catch (err) {
       console.error('❌ Unexpected error uploading:', err)
-      alert('An unexpected error occurred. Please try again.')
+      alert('Something went wrong. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -102,21 +101,21 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">📸 Photo Gallery</h2>
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-2"></div>
-          <p className="text-gray-600">Loading photos...</p>
+      <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+        <h2 className="text-xl font-medium text-stone-800 mb-4">Moments</h2>
+        <div className="bg-stone-50 rounded-lg p-8 text-center">
+          <div className="w-6 h-6 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-stone-600">Loading moments...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">📸 Photo Gallery</h2>
-        <span className="text-sm text-gray-500">{media.length} photos</span>
+    <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-medium text-stone-800">Moments</h2>
+        <span className="text-sm text-stone-500">{media.length} shared</span>
       </div>
 
       {/* Upload Section */}
@@ -129,19 +128,23 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
             disabled={uploading || !currentUserId}
             className="hidden"
           />
-          <div className={`border-2 border-dashed border-purple-300 rounded-lg p-4 text-center cursor-pointer hover:border-purple-400 transition-colors ${
+          <div className={`border-2 border-dashed border-stone-300 rounded-lg p-6 text-center cursor-pointer hover:border-stone-400 hover:bg-stone-50 transition-all ${
             uploading ? 'opacity-50 cursor-not-allowed' : ''
           }`}>
             {uploading ? (
               <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500 mr-2"></div>
-                <span className="text-purple-600">Uploading...</span>
+                <div className="w-5 h-5 border-2 border-stone-400 border-t-stone-600 rounded-full animate-spin mr-3"></div>
+                <span className="text-stone-600">Uploading your moment...</span>
               </div>
             ) : (
               <>
-                <div className="text-3xl mb-2">📷</div>
-                <p className="text-purple-600 font-medium">Click to upload a photo or video</p>
-                <p className="text-gray-500 text-sm mt-1">Share your memories from this special day</p>
+                <div className="w-12 h-12 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+                <p className="text-stone-700 font-medium mb-1">Share a moment from the day</p>
+                <p className="text-stone-500 text-sm">Upload a photo or video to preserve this memory</p>
               </>
             )}
           </div>
@@ -153,13 +156,13 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {media.map((item) => (
             <div key={item.id} className="relative group">
-              <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
+              <div className="aspect-square bg-stone-100 rounded-lg overflow-hidden relative">
                 {item.media_type === 'image' ? (
                   <Image
                     src={getMediaUrl(item.storage_path)}
-                    alt={item.caption || 'Wedding photo'}
+                    alt={item.caption || 'Wedding moment'}
                     fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-200"
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <video
@@ -170,16 +173,15 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
                 )}
               </div>
               {item.caption && (
-                <p className="text-sm text-gray-600 mt-1 truncate">{item.caption}</p>
+                <p className="text-sm text-stone-600 mt-2 truncate">{item.caption}</p>
               )}
             </div>
           ))}
         </div>
       ) : (
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <div className="text-4xl mb-2">📷</div>
-          <p className="text-gray-600">No photos yet</p>
-          <p className="text-gray-500 text-sm">Be the first to share a memory!</p>
+        <div className="bg-stone-50 rounded-lg p-8 text-center">
+          <p className="text-stone-600 mb-1">No memories yet—but they're coming.</p>
+          <p className="text-stone-500 text-sm">Be the first to share a moment from this special day.</p>
         </div>
       )}
     </div>

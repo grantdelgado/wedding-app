@@ -14,13 +14,13 @@ export default function ProfileAvatar() {
   return (
     <button
       onClick={() => router.push('/profile')}
-      className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center hover:ring-2 hover:ring-black transition"
+      className="w-10 h-10 rounded-full bg-white border border-stone-200 flex items-center justify-center hover:ring-2 hover:ring-purple-200 hover:border-purple-300 transition-all duration-200 shadow-sm hover:shadow-md"
       aria-label="Profile"
     >
-      {/* Default user icon (SVG) */}
-      <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
-        <circle cx="12" cy="8" r="4" fill="#888" />
-        <ellipse cx="12" cy="17" rx="7" ry="4" fill="#bbb" />
+      {/* User icon with brand styling */}
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4" fill="#6b7280" />
+        <ellipse cx="12" cy="17" rx="7" ry="4" fill="#9ca3af" />
       </svg>
     </button>
   );
