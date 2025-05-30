@@ -148,8 +148,8 @@ export default function SelectEventPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-8">
-          <h1 className="text-2xl font-semibold text-stone-800 mb-4">We're having trouble connecting</h1>
-          <p className="text-stone-600 mb-6">We couldn't load your celebrations right now. Please try again in a moment.</p>
+          <h1 className="text-2xl font-semibold text-stone-800 mb-4">We&apos;re having trouble connecting</h1>
+          <p className="text-stone-600 mb-6">We couldn&apos;t load your celebrations right now. Please try again in a moment.</p>
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-3 bg-stone-800 text-white rounded-lg hover:bg-stone-900 transition-colors font-medium"
@@ -210,7 +210,7 @@ export default function SelectEventPage() {
             <div>
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold text-stone-800 mb-1">Your Wedding Hubs</h2>
-                <p className="text-stone-600">Celebrations you're hosting and managing</p>
+                <p className="text-stone-600">Celebrations you&apos;re hosting and managing</p>
               </div>
               <div className="grid gap-4">
                 {sortedHostedEvents.map((event) => {
@@ -292,7 +292,7 @@ export default function SelectEventPage() {
             <div>
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold text-stone-800 mb-1">Your Invitations</h2>
-                <p className="text-stone-600">Celebrations you're invited to attend</p>
+                <p className="text-stone-600">Celebrations you&apos;re invited to attend</p>
               </div>
               <div className="grid gap-4">
                 {sortedGuestEvents.map((event) => {
@@ -361,7 +361,7 @@ export default function SelectEventPage() {
             <div className="text-center py-16">
               <div className="max-w-md mx-auto">
                 <h3 className="text-2xl font-semibold text-stone-800 mb-4">Your celebration journey begins here</h3>
-                <p className="text-stone-600 mb-2">You haven't created or joined any wedding celebrations yet.</p>
+                <p className="text-stone-600 mb-2">You haven&apos;t created or joined any wedding celebrations yet.</p>
                 <p className="text-stone-500 mb-8">Start by creating your first wedding hub to bring your guests together.</p>
                 <Link
                   href="/host/events/create"

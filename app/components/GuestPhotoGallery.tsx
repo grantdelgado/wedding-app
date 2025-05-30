@@ -180,7 +180,7 @@ export default function GuestPhotoGallery({ eventId, currentUserId }: GuestPhoto
         </div>
       ) : (
         <div className="bg-stone-50 rounded-lg p-8 text-center">
-          <p className="text-stone-600 mb-1">No memories yet—but they're coming.</p>
+          <p className="text-stone-600 mb-1">No memories yet—but they&apos;re coming.</p>
           <p className="text-stone-500 text-sm">Be the first to share a moment from this special day.</p>
         </div>
       )}

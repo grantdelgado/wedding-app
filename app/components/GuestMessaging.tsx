@@ -161,7 +161,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
           })
         ) : (
           <div className="text-center py-8">
-            <p className="text-stone-600 mb-1">No broadcasts yet—but they'll arrive soon.</p>
+            <p className="text-stone-600 mb-1">No broadcasts yet—but they&apos;ll arrive soon.</p>
             <p className="text-stone-500 text-sm">Hosts will share updates here.</p>
           </div>
         )}

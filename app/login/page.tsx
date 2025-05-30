@@ -31,7 +31,7 @@ export default function LoginPage() {
           </h1>
           <div className="w-16 h-px bg-gradient-to-r from-transparent via-rose-300 to-transparent mx-auto mb-6"></div>
           <p className="text-stone-600">
-            Welcome to Unveil. Let's get started.
+            Welcome to Unveil. Let&apos;s get started.
           </p>
         </div>
 
@@ -75,7 +75,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-stone-500 mt-6">
-          We'll send you a secure link to sign in
+          We&apos;ll send you a secure link to sign in
         </p>
       </div>
     </div>

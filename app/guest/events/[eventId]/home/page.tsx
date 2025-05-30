@@ -162,10 +162,10 @@ export default function GuestEventHomePage() {
             <div className="bg-gradient-to-r from-rose-50 to-purple-50 rounded-xl border border-rose-200/50 p-8">
               <div className="text-center">
                 <h2 className="text-2xl font-semibold text-stone-800 mb-3">
-                  You're invited to celebrate
+                  You&apos;re invited to celebrate
                 </h2>
                 <p className="text-stone-600 text-lg leading-relaxed">
-                  We're so excited to share this special moment with you. Your presence would make our day even more magical.
+                  We&apos;re so excited to share this special moment with you. Your presence would make our day even more magical.
                 </p>
               </div>
             </div>
@@ -241,7 +241,7 @@ export default function GuestEventHomePage() {
                       : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300'
                   }`}
                 >
-                  Yes, I'll be there
+                  Yes, I&apos;ll be there
                 </button>
                 
                 <button
@@ -252,7 +252,7 @@ export default function GuestEventHomePage() {
                       : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 hover:border-amber-300'
                   }`}
                 >
-                  I'm not sure yet
+                  I&apos;m not sure yet
                 </button>
                 
                 <button
@@ -263,7 +263,7 @@ export default function GuestEventHomePage() {
                       : 'bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200 hover:border-stone-300'
                   }`}
                 >
-                  I can't make it
+                  I can&apos;t make it
                 </button>
               </div>
             </div>
