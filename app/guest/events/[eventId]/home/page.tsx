@@ -73,7 +73,7 @@ export default function GuestEventHomePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
-          <h1 className="text-2xl font-semibold text-stone-800 mb-2">We couldn't find this celebration</h1>
+          <h1 className="text-2xl font-semibold text-stone-800 mb-2">We couldn&apos;t find this celebration</h1>
           <p className="text-stone-600 mb-6">{error || 'This wedding hub may have been moved or is no longer available.'}</p>
           <button
             onClick={() => router.push('/select-event')}
