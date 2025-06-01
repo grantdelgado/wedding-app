@@ -1,0 +1,350 @@
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
+import { z } from 'zod'
+import { isValidEmail } from './utils'
+import type { EventGuestInsert } from './supabase'
+
+// Guest import validation schema
+export const guestImportSchema = z.object({
+  guest_name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  guest_email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().max(20, 'Phone too long').optional().or(z.literal('')),
+  notes: z.string().max(1000, 'Notes too long').optional().or(z.literal('')),
+  guest_tags: z.array(z.string()).optional(),
+  rsvp_status: z.enum(['Attending', 'Declined', 'Maybe', 'Pending']).optional(),
+})
+
+export type GuestImportData = z.infer<typeof guestImportSchema>
+
+// Common column mappings that users might have
+export const COMMON_COLUMN_MAPPINGS = {
+  name: ['name', 'full name', 'guest name', 'first name', 'last name', 'full_name', 'guest_name'],
+  email: ['email', 'email address', 'e-mail', 'guest email', 'guest_email'],
+  phone: ['phone', 'phone number', 'mobile', 'cell', 'telephone', 'contact'],
+  notes: ['notes', 'comments', 'remarks', 'special requests', 'dietary restrictions'],
+  tags: ['tags', 'group', 'category', 'table', 'side', 'family', 'friends'],
+  rsvp: ['rsvp', 'status', 'response', 'attending', 'rsvp_status'],
+} as const
+
+// File parsing results
+export interface ParsedFileResult {
+  success: boolean
+  data?: Record<string, string>[]
+  error?: string
+  headers?: string[]
+}
+
+// Import validation results
+export interface ImportValidationResult {
+  validGuests: GuestImportData[]
+  invalidGuests: Array<{
+    row: number
+    data: Record<string, string>
+    errors: string[]
+  }>
+  summary: {
+    total: number
+    valid: number
+    invalid: number
+    duplicateEmails: number
+  }
+}
+
+// Column mapping interface
+export interface ColumnMappingType {
+  [key: string]: keyof GuestImportData | null
+}
+
+/**
+ * Parse CSV file
+ */
+export const parseCSVFile = (file: File): Promise<ParsedFileResult> => {
+  return new Promise((resolve) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim().toLowerCase(),
+      complete: (results) => {
+        if (results.errors.length > 0) {
+          resolve({
+            success: false,
+            error: `CSV parsing error: ${results.errors[0].message}`,
+          })
+          return
+        }
+
+        const data = results.data as Record<string, string>[]
+        const headers = results.meta.fields || []
+
+        resolve({
+          success: true,
+          data,
+          headers,
+        })
+      },
+      error: (error) => {
+        resolve({
+          success: false,
+          error: `Failed to parse CSV: ${error.message}`,
+        })
+      },
+    })
+  })
+}
+
+/**
+ * Parse Excel file
+ */
+export const parseExcelFile = (file: File): Promise<ParsedFileResult> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        
+        // Use the first sheet
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        
+        // Convert to JSON with header row
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1,
+          defval: '',
+        }) as string[][]
+        
+        if (jsonData.length < 2) {
+          resolve({
+            success: false,
+            error: 'Excel file must have at least a header row and one data row',
+          })
+          return
+        }
+        
+        // Extract headers and normalize
+        const headers = jsonData[0].map(h => String(h).trim().toLowerCase())
+        
+        // Convert to object format
+        const parsedData = jsonData.slice(1).map((row) => {
+          const obj: Record<string, string> = {}
+          headers.forEach((header, i) => {
+            obj[header] = String(row[i] || '').trim()
+          })
+          return obj
+        }).filter(row => {
+          // Filter out completely empty rows
+          return Object.values(row).some(value => value !== '')
+        })
+        
+        resolve({
+          success: true,
+          data: parsedData,
+          headers,
+        })
+      } catch (error) {
+        resolve({
+          success: false,
+          error: `Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })
+      }
+    }
+    
+    reader.onerror = () => {
+      resolve({
+        success: false,
+        error: 'Failed to read file',
+      })
+    }
+    
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+/**
+ * Auto-detect column mappings based on common patterns
+ */
+export const autoDetectColumnMapping = (headers: string[]): ColumnMappingType => {
+  const mapping: ColumnMappingType = {}
+  
+  headers.forEach(header => {
+    const normalizedHeader = header.toLowerCase().trim()
+    
+    // Check each mapping category
+    for (const [field, patterns] of Object.entries(COMMON_COLUMN_MAPPINGS)) {
+      if (patterns.some(pattern => normalizedHeader.includes(pattern))) {
+        mapping[header] = field as keyof GuestImportData
+        break
+      }
+    }
+  })
+  
+  return mapping
+}
+
+/**
+ * Validate and transform imported guest data
+ */
+export const validateImportedGuests = (
+  data: Record<string, string>[],
+  columnMapping: ColumnMappingType
+): ImportValidationResult => {
+  const validGuests: GuestImportData[] = []
+  const invalidGuests: Array<{
+    row: number
+    data: Record<string, string>
+    errors: string[]
+  }> = []
+  
+  const seenEmails = new Set<string>()
+  let duplicateEmails = 0
+  
+  data.forEach((row, index) => {
+    const errors: string[] = []
+    const guestData: Partial<GuestImportData> = {}
+    
+    // Map columns to guest fields
+    Object.entries(columnMapping).forEach(([csvColumn, guestField]) => {
+      if (!guestField) return
+      
+      const value = row[csvColumn]?.trim() || ''
+      
+      switch (guestField) {
+        case 'guest_name':
+          guestData.guest_name = value
+          break
+        case 'guest_email':
+          if (value) {
+            if (isValidEmail(value)) {
+              if (seenEmails.has(value.toLowerCase())) {
+                duplicateEmails++
+                errors.push(`Duplicate email: ${value}`)
+              } else {
+                seenEmails.add(value.toLowerCase())
+                guestData.guest_email = value
+              }
+            } else {
+              errors.push(`Invalid email format: ${value}`)
+            }
+          }
+          break
+        case 'phone':
+          guestData.phone = value
+          break
+        case 'notes':
+          guestData.notes = value
+          break
+        case 'guest_tags':
+          if (value) {
+            // Split by common delimiters
+            const tags = value.split(/[,;|]/).map(tag => tag.trim()).filter(Boolean)
+            guestData.guest_tags = tags
+          }
+          break
+        case 'rsvp_status':
+          if (value) {
+            const normalizedStatus = value.toLowerCase()
+            if (['attending', 'yes', 'going', 'accept'].includes(normalizedStatus)) {
+              guestData.rsvp_status = 'Attending'
+            } else if (['declined', 'no', 'not going', 'decline'].includes(normalizedStatus)) {
+              guestData.rsvp_status = 'Declined'
+            } else if (['maybe', 'perhaps', 'unsure'].includes(normalizedStatus)) {
+              guestData.rsvp_status = 'Maybe'
+            } else {
+              guestData.rsvp_status = 'Pending'
+            }
+          }
+          break
+      }
+    })
+    
+    // Validate the guest data
+    const validation = guestImportSchema.safeParse(guestData)
+    
+    if (!validation.success) {
+      validation.error.errors.forEach(err => {
+        errors.push(`${err.path.join('.')}: ${err.message}`)
+      })
+    }
+    
+    if (errors.length > 0) {
+      invalidGuests.push({
+        row: index + 1,
+        data: row,
+        errors,
+      })
+    } else {
+      validGuests.push(validation.data!)
+    }
+  })
+  
+  return {
+    validGuests,
+    invalidGuests,
+    summary: {
+      total: data.length,
+      valid: validGuests.length,
+      invalid: invalidGuests.length,
+      duplicateEmails,
+    },
+  }
+}
+
+/**
+ * Convert validated guest data to database format
+ */
+export const convertToEventGuests = (
+  guests: GuestImportData[],
+  eventId: string
+): EventGuestInsert[] => {
+  return guests.map(guest => ({
+    event_id: eventId,
+    guest_name: guest.guest_name,
+    guest_email: guest.guest_email || null,
+    phone: guest.phone || null,
+    notes: guest.notes || null,
+    guest_tags: guest.guest_tags || null,
+    rsvp_status: guest.rsvp_status || 'Pending',
+    user_id: null, // Will be linked when guest signs up
+  }))
+}
+
+/**
+ * Validate file type and size
+ */
+export const validateImportFile = (file: File): { valid: boolean; error?: string } => {
+  const maxSize = 10 * 1024 * 1024 // 10MB
+  const allowedTypes = [
+    'text/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ]
+  
+  if (file.size > maxSize) {
+    return { valid: false, error: 'File size must be less than 10MB' }
+  }
+  
+  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(csv|xlsx|xls)$/i)) {
+    return { valid: false, error: 'File must be CSV or Excel format' }
+  }
+  
+  return { valid: true }
+}
+
+/**
+ * Generate sample CSV template
+ */
+export const generateSampleCSV = (): string => {
+  const headers = ['Name', 'Email', 'Phone', 'Notes', 'Tags', 'RSVP Status']
+  const sampleData = [
+    ['John Smith', 'john@example.com', '(555) 123-4567', 'Vegetarian meal', 'Family,Groomsmen', 'Attending'],
+    ['Jane Doe', 'jane@example.com', '(555) 987-6543', 'Plus one: Mike Johnson', 'Friends', 'Pending'],
+    ['Bob Wilson', 'bob@example.com', '', 'Wheelchair accessible seating', 'Coworkers', 'Maybe'],
+  ]
+  
+  const csvContent = [headers, ...sampleData]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n')
+  
+  return csvContent
+} 

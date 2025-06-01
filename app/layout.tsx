@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthSessionWatcher from './components/AuthSessionWatcher'
 import ProfileAvatar from './components/ProfileAvatar';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { APP_CONFIG } from '@/lib/constants';
 import { Suspense } from 'react';
 
 const inter = Inter({
@@ -11,8 +13,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Unveil",
-  description: "Focus on presence, not logistics. Streamline wedding communication and preserve shared memories in one elegant space.",
+  title: APP_CONFIG.name,
+  description: APP_CONFIG.description,
 };
 
 export default function RootLayout({
@@ -23,14 +25,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} antialiased font-sans`}>
-        <Suspense>
-          <AuthSessionWatcher>
-            <div className="absolute top-4 right-4 z-50">
-              <ProfileAvatar />
-            </div>
-            {children}
-          </AuthSessionWatcher>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense>
+            <AuthSessionWatcher>
+              <div className="absolute top-4 right-4 z-50">
+                <ProfileAvatar />
+              </div>
+              {children}
+            </AuthSessionWatcher>
+          </Suspense>
+        </ErrorBoundary>
       </body>
     </html>
   );

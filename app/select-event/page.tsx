@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useEvents } from '@/app/lib/useEvents'
-import Link from 'next/link'
 import type { Database } from '@/app/reference/supabase.types'
 
 type Event = Database['public']['Tables']['events']['Row']
@@ -25,58 +25,37 @@ export default function SelectEventPage() {
   // Helper function to format countdown text with more elegant language
   const getCountdownText = (days: number) => {
     if (days < 0) {
-      const daysPast = Math.abs(days)
-      if (daysPast === 1) return 'Yesterday'
-      if (daysPast <= 100) return `${daysPast} days ago`
-      
-      const monthsPast = Math.floor(daysPast / 30)
-      const remainingDays = daysPast % 30
-      if (monthsPast < 12) {
-        if (remainingDays === 0) return `${monthsPast} month${monthsPast > 1 ? 's' : ''} ago`
-        return `${monthsPast}m ${remainingDays}d ago`
-      }
-      
-      const yearsPast = Math.floor(daysPast / 365)
-      const remainingMonths = Math.floor((daysPast % 365) / 30)
-      if (remainingMonths === 0) return `${yearsPast} year${yearsPast > 1 ? 's' : ''} ago`
-      return `${yearsPast}y ${remainingMonths}m ago`
-    } else if (days === 0) {
-      return 'Today'
-    } else if (days === 1) {
-      return 'Tomorrow'
-    } else if (days <= 100) {
-      return `${days} days away`
-    } else if (days < 365) {
-      const months = Math.floor(days / 30)
-      const remainingDays = days % 30
-      if (remainingDays === 0) return `${months} month${months > 1 ? 's' : ''} away`
-      return `${months}m ${remainingDays}d away`
-    } else {
-      const years = Math.floor(days / 365)
-      const remainingMonths = Math.floor((days % 365) / 30)
-      if (remainingMonths === 0) return `${years} year${years > 1 ? 's' : ''} away`
-      return `${years}y ${remainingMonths}m away`
+      const pastDays = Math.abs(days)
+      if (pastDays === 1) return 'Yesterday'
+      if (pastDays <= 7) return `${pastDays} days ago`
+      if (pastDays <= 30) return `${Math.floor(pastDays / 7)} weeks ago`
+      return 'Past celebration'
     }
+    if (days === 0) return 'Today!'
+    if (days === 1) return 'Tomorrow'
+    if (days <= 7) return `${days} days away`
+    if (days <= 30) return `${Math.floor(days / 7)} weeks away`
+    if (days <= 365) return `${Math.floor(days / 30)} months away`
+    return `${Math.floor(days / 365)} years away`
   }
 
   // Helper function to sort events by date (soonest first)
   const sortEventsByDate = (events: Event[]) => {
-    return [...events].sort((a, b) => {
-      const dateA = new Date(a.event_date).getTime()
-      const dateB = new Date(b.event_date).getTime()
-      return dateA - dateB
-    })
+    return [...events].sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
   }
 
   useEffect(() => {
     const getSession = async () => {
       const {
         data: { session },
-        error: sessionError,
+        error,
       } = await supabase.auth.getSession()
-
-      if (sessionError || !session?.user) {
-        console.error('❌ Error getting session:', sessionError)
+      if (error) {
+        console.error('❌ Error fetching session:', error)
+        router.push('/login')
+        return
+      }
+      if (!session?.user) {
         router.push('/login')
         return
       }
@@ -86,44 +65,6 @@ export default function SelectEventPage() {
   }, [router])
 
   const { hostedEvents, guestEvents, loading, error: fetchError } = useEvents(currentUserId)
-
-  useEffect(() => {
-    const seedDebugEvent = async (userId: string) => {
-      if (process.env.NODE_ENV !== 'development') return;
-      if (!userId || loading) return;
-
-      const { data: existing } = await supabase
-        .from('events')
-        .select('id')
-        .eq('title', '🛠️ Debug Test Event')
-        .eq('host_user_id', userId)
-
-      if (!existing?.length) {
-        const { data: newEvent } = await supabase
-          .from('events')
-          .insert({
-            title: '🛠️ Debug Test Event',
-            event_date: new Date().toISOString().split('T')[0],
-            host_user_id: userId,
-          })
-          .select()
-          .single()
-
-        if (newEvent?.id) {
-          await supabase.from('guests').insert({
-            user_id: userId,
-            event_id: newEvent.id,
-            full_name: 'Debug User',
-          })
-          console.log('✅ Seeded debug event + guest')
-        }
-      }
-    }
-
-    if (currentUserId) {
-      seedDebugEvent(currentUserId)
-    }
-  }, [currentUserId, loading, hostedEvents, guestEvents])
 
   const handleSelect = (eventId: string, role: 'host' | 'guest') => {
     const path =
@@ -357,19 +298,23 @@ export default function SelectEventPage() {
           )}
 
           {/* Empty State */}
-          {validHostedEvents.length === 0 && validGuestEvents.length === 0 && !loading && (
+          {sortedHostedEvents.length === 0 && sortedGuestEvents.length === 0 && (
             <div className="text-center py-16">
-              <div className="max-w-md mx-auto">
-                <h3 className="text-2xl font-semibold text-stone-800 mb-4">Your celebration journey begins here</h3>
-                <p className="text-stone-600 mb-2">You haven&apos;t created or joined any wedding celebrations yet.</p>
-                <p className="text-stone-500 mb-8">Start by creating your first wedding hub to bring your guests together.</p>
-                <Link
-                  href="/host/events/create"
-                  className="inline-flex items-center justify-center px-8 py-4 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  Create Your First Wedding Hub
-                </Link>
+              <div className="w-24 h-24 bg-gradient-to-br from-rose-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-12 h-12 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
               </div>
+              <h2 className="text-2xl font-semibold text-stone-800 mb-3">No celebrations yet</h2>
+              <p className="text-stone-600 mb-8 max-w-md mx-auto">
+                You haven&apos;t created any wedding hubs or been invited to any celebrations yet. Ready to start planning?
+              </p>
+              <Link
+                href="/host/events/create"
+                className="inline-flex items-center justify-center px-8 py-4 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 transition-all duration-200 shadow-sm hover:shadow-md"
+              >
+                Create Your First Wedding Hub
+              </Link>
             </div>
           )}
         </div>

@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/Button'
+import { LoadingPage } from '@/components/ui/LoadingSpinner'
+import { GuestImportWizard } from '@/components/guest-import'
+import { formatEventDate } from '@/lib/utils'
 import type { Database } from '@/app/reference/supabase.types'
 
 type Event = Database['public']['Tables']['events']['Row']
@@ -12,8 +16,16 @@ export default function EventDashboardPage() {
   const router = useRouter()
   const eventId = params.eventId as string
   const [event, setEvent] = useState<Event | null>(null)
+  const [guestCount, setGuestCount] = useState(0)
+  const [rsvpCounts, setRsvpCounts] = useState({
+    attending: 0,
+    declined: 0,
+    maybe: 0,
+    pending: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showImportWizard, setShowImportWizard] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
 
   useEffect(() => {
@@ -44,6 +56,30 @@ export default function EventDashboardPage() {
         }
 
         setEvent(eventData)
+
+        // Fetch guest statistics
+        const { data: guestData, error: guestError } = await supabase
+          .from('event_guests')
+          .select('rsvp_status')
+          .eq('event_id', eventId)
+
+        if (guestError) {
+          console.error('❌ Error fetching guests:', guestError)
+        } else {
+          setGuestCount(guestData.length)
+          
+          const counts = guestData.reduce((acc, guest) => {
+            const status = guest.rsvp_status?.toLowerCase() || 'pending'
+            if (status === 'attending') acc.attending++
+            else if (status === 'declined') acc.declined++
+            else if (status === 'maybe') acc.maybe++
+            else acc.pending++
+            return acc
+          }, { attending: 0, declined: 0, maybe: 0, pending: 0 })
+          
+          setRsvpCounts(counts)
+        }
+
         setLoading(false)
 
       } catch (err) {
@@ -69,46 +105,49 @@ export default function EventDashboardPage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  const handleImportSuccess = () => {
+    setShowImportWizard(false)
+    // Refresh the page data
+    window.location.reload()
+  }
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading event dashboard...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Loading event dashboard..." />
   }
 
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-6xl mb-4">😔</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Oops!</h1>
-          <p className="text-gray-600 mb-6">{error || 'Event not found'}</p>
-          <button
-            onClick={() => router.push('/select-event')}
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-8">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold text-stone-800 mb-4">Oops!</h1>
+          <p className="text-stone-600 mb-6">{error || 'Event not found'}</p>
+          <Button onClick={() => router.push('/select-event')}>
             Back to Events
-          </button>
+          </Button>
         </div>
       </div>
     )
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
+  if (showImportWizard) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 py-8">
+        <GuestImportWizard
+          eventId={eventId}
+          onSuccess={handleImportSuccess}
+          onCancel={() => setShowImportWizard(false)}
+        />
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50">
       {/* Header */}
       <div className={`sticky top-0 z-40 bg-white border-b transition-all duration-300 ${
         isScrolled 
@@ -119,7 +158,7 @@ export default function EventDashboardPage() {
           <div className={`transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
             <button
               onClick={() => router.push('/select-event')}
-              className={`text-gray-600 hover:text-gray-800 font-medium transition-all duration-300 ${
+              className={`text-stone-600 hover:text-stone-800 font-medium transition-all duration-300 ${
                 isScrolled ? 'text-sm mb-1' : 'mb-2'
               }`}
             >
@@ -127,12 +166,12 @@ export default function EventDashboardPage() {
             </button>
             <div className="flex items-center justify-between">
               <div>
-                <h1 className={`font-bold text-gray-900 transition-all duration-300 ${
+                <h1 className={`font-bold text-stone-800 transition-all duration-300 ${
                   isScrolled ? 'text-xl' : 'text-3xl'
                 }`}>
                   {event.title}
                 </h1>
-                <p className={`text-gray-600 transition-all duration-300 ${
+                <p className={`text-stone-600 transition-all duration-300 ${
                   isScrolled ? 'text-sm' : ''
                 }`}>
                   Host Dashboard
@@ -140,7 +179,7 @@ export default function EventDashboardPage() {
               </div>
               <div className={`px-3 py-1 rounded-full border font-medium transition-all duration-300 ${
                 isScrolled ? 'text-xs' : 'text-sm'
-              } bg-blue-100 text-blue-800 border-blue-200`}>
+              } bg-purple-100 text-purple-800 border-purple-200`}>
                 Host
               </div>
             </div>
@@ -153,15 +192,18 @@ export default function EventDashboardPage() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Event Details Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">📅 Event Details</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+              <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
+                <span className="text-2xl mr-2">📅</span>
+                Event Details
+              </h2>
               
               <div className="space-y-4">
                 <div className="flex items-start space-x-3">
                   <div className="text-2xl">📅</div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Date</h3>
-                    <p className="text-gray-600">{formatDate(event.event_date)}</p>
+                    <h3 className="font-medium text-stone-800">Date</h3>
+                    <p className="text-stone-600">{formatEventDate(event.event_date)}</p>
                   </div>
                 </div>
 
@@ -169,8 +211,8 @@ export default function EventDashboardPage() {
                   <div className="flex items-start space-x-3">
                     <div className="text-2xl">📍</div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Location</h3>
-                      <p className="text-gray-600">{event.location}</p>
+                      <h3 className="font-medium text-stone-800">Location</h3>
+                      <p className="text-stone-600">{event.location}</p>
                     </div>
                   </div>
                 )}
@@ -179,8 +221,8 @@ export default function EventDashboardPage() {
                   <div className="flex items-start space-x-3">
                     <div className="text-2xl">💌</div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Description</h3>
-                      <p className="text-gray-600">{event.description}</p>
+                      <h3 className="font-medium text-stone-800">Description</h3>
+                      <p className="text-stone-600">{event.description}</p>
                     </div>
                   </div>
                 )}
@@ -188,24 +230,27 @@ export default function EventDashboardPage() {
             </div>
 
             {/* Quick Stats */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">📊 Quick Stats</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+              <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
+                <span className="text-2xl mr-2">📊</span>
+                Quick Stats
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">0</div>
-                  <div className="text-sm text-gray-600">Guests</div>
+                <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-600">{guestCount}</div>
+                  <div className="text-sm text-blue-800">Total Guests</div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">0</div>
-                  <div className="text-sm text-gray-600">RSVPs</div>
+                <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
+                  <div className="text-2xl font-bold text-green-600">{rsvpCounts.attending}</div>
+                  <div className="text-sm text-green-800">Attending</div>
                 </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">0</div>
-                  <div className="text-sm text-gray-600">Photos</div>
+                <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200">
+                  <div className="text-2xl font-bold text-amber-600">{rsvpCounts.maybe}</div>
+                  <div className="text-sm text-amber-800">Maybe</div>
                 </div>
-                <div className="text-center p-4 bg-pink-50 rounded-lg">
-                  <div className="text-2xl font-bold text-pink-600">0</div>
-                  <div className="text-sm text-gray-600">Messages</div>
+                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+                  <div className="text-2xl font-bold text-purple-600">{rsvpCounts.pending}</div>
+                  <div className="text-sm text-purple-800">Pending</div>
                 </div>
               </div>
             </div>
@@ -214,46 +259,99 @@ export default function EventDashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Quick Actions */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">⚡ Quick Actions</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+              <h2 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
+                <span className="text-xl mr-2">⚡</span>
+                Quick Actions
+              </h2>
               
               <div className="space-y-3">
-                <button className="w-full py-3 px-4 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-200 font-medium transition-colors">
-                  👥 Manage Guests
-                </button>
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                  onClick={() => setShowImportWizard(true)}
+                >
+                  <span className="mr-2">📤</span>
+                  Import Guest List
+                </Button>
                 
-                <button className="w-full py-3 px-4 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 border border-green-200 font-medium transition-colors">
-                  📧 Send Invitations
-                </button>
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                >
+                  <span className="mr-2">👥</span>
+                  Manage Guests
+                </Button>
                 
-                <button className="w-full py-3 px-4 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 border border-purple-200 font-medium transition-colors">
-                  📸 View Gallery
-                </button>
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                >
+                  <span className="mr-2">📧</span>
+                  Send Invitations
+                </Button>
                 
-                <button className="w-full py-3 px-4 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 border border-pink-200 font-medium transition-colors">
-                  💬 Messages
-                </button>
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                >
+                  <span className="mr-2">📸</span>
+                  View Gallery
+                </Button>
+                
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                >
+                  <span className="mr-2">💬</span>
+                  Messages
+                </Button>
               </div>
             </div>
 
             {/* Event Settings */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">⚙️ Settings</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+              <h2 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
+                <span className="text-xl mr-2">⚙️</span>
+                Settings
+              </h2>
               
-              <div className="space-y-3">
-                <button className="w-full py-2 px-4 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                  ✏️ Edit Event Details
+              <div className="space-y-2">
+                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
+                  <span className="mr-2">✏️</span>
+                  Edit Event Details
                 </button>
                 
-                <button className="w-full py-2 px-4 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                  🔒 Privacy Settings
+                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
+                  <span className="mr-2">🔒</span>
+                  Privacy Settings
                 </button>
                 
-                <button className="w-full py-2 px-4 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                  📋 Export Data
+                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
+                  <span className="mr-2">📋</span>
+                  Export Data
                 </button>
               </div>
             </div>
+
+            {/* Getting Started */}
+            {guestCount === 0 && (
+              <div className="bg-gradient-to-br from-purple-50 to-rose-50 border border-purple-200 rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-stone-800 mb-2">
+                  🚀 Getting Started
+                </h3>
+                <p className="text-stone-600 text-sm mb-4">
+                  Ready to invite your guests? Start by importing your guest list from a spreadsheet.
+                </p>
+                <Button 
+                  size="sm"
+                  onClick={() => setShowImportWizard(true)}
+                  className="w-full"
+                >
+                  Import Your Guest List
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
