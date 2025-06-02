@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -24,10 +24,9 @@ export function MessageComposer({ eventId, onMessageScheduled }: MessageComposer
   const [guests, setGuests] = useState<Guest[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [preview, setPreview] = useState<MessagePreview>({ recipientCount: 0, recipients: [] })
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [preview, setPreview] = useState<MessagePreview | null>(null)
 
-  // Form state
   const [formData, setFormData] = useState({
     subject: '',
     content: '',
@@ -46,17 +45,7 @@ export function MessageComposer({ eventId, onMessageScheduled }: MessageComposer
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => {
-    fetchData()
-  }, [eventId])
-
-  useEffect(() => {
-    if (showPreview) {
-      updatePreview()
-    }
-  }, [formData, showPreview])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       // Fetch sub-events
@@ -91,9 +80,9 @@ export function MessageComposer({ eventId, onMessageScheduled }: MessageComposer
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId])
 
-  const updatePreview = async () => {
+  const updatePreview = useCallback(async () => {
     setPreviewLoading(true)
     try {
       let targetedGuests = guests
@@ -127,9 +116,19 @@ export function MessageComposer({ eventId, onMessageScheduled }: MessageComposer
     } finally {
       setPreviewLoading(false)
     }
-  }
+  }, [guests, formData])
 
-  const handleInputChange = (field: keyof typeof formData, value: any) => {
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  useEffect(() => {
+    if (showPreview) {
+      updatePreview()
+    }
+  }, [showPreview, updatePreview])
+
+  const handleInputChange = (field: keyof typeof formData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -153,7 +152,7 @@ export function MessageComposer({ eventId, onMessageScheduled }: MessageComposer
         ? new Date().toISOString()
         : new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('scheduled_messages')
         .insert({
           event_id: eventId,

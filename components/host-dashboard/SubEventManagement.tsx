@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -27,11 +27,7 @@ export function SubEventManagement({ eventId, onSubEventUpdated }: SubEventManag
     is_required: true
   })
 
-  useEffect(() => {
-    fetchSubEvents()
-  }, [eventId])
-
-  const fetchSubEvents = async () => {
+  const fetchSubEvents = useCallback(async () => {
     setLoading(true)
     try {
       const { data, error } = await supabase
@@ -47,7 +43,11 @@ export function SubEventManagement({ eventId, onSubEventUpdated }: SubEventManag
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId])
+
+  useEffect(() => {
+    fetchSubEvents()
+  }, [fetchSubEvents])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
