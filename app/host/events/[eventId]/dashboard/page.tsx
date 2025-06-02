@@ -9,6 +9,9 @@ import { LoadingPage } from '@/components/ui/LoadingSpinner'
 import { GuestImportWizard } from '@/components/guest-import'
 import { formatEventDate } from '@/lib/utils'
 import type { Database } from '@/app/reference/supabase.types'
+import { GuestManagement } from '@/components/host-dashboard/GuestManagement'
+import { MessageComposer } from '@/components/host-dashboard/MessageComposer'
+import { SubEventManagement } from '@/components/host-dashboard/SubEventManagement'
 
 type Event = Database['public']['Tables']['events']['Row']
 
@@ -28,6 +31,7 @@ export default function EventDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [showImportWizard, setShowImportWizard] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     const fetchEventData = async () => {
@@ -198,6 +202,7 @@ export default function EventDashboardPage() {
               className="w-full h-full object-cover"
               width={1280}
               height={720}
+              priority
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
             <div className="absolute bottom-6 left-6 text-white">
@@ -222,67 +227,151 @@ export default function EventDashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Event Details Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-              <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
-                <span className="text-2xl mr-2">📅</span>
-                Event Details
-              </h2>
-              
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">📅</div>
-                  <div>
-                    <h3 className="font-medium text-stone-800">Date</h3>
-                    <p className="text-stone-600">{formatEventDate(event.event_date)}</p>
-                  </div>
-                </div>
-
-                {event.location && (
-                  <div className="flex items-start space-x-3">
-                    <div className="text-2xl">📍</div>
-                    <div>
-                      <h3 className="font-medium text-stone-800">Location</h3>
-                      <p className="text-stone-600">{event.location}</p>
-                    </div>
-                  </div>
-                )}
-
-                {event.description && (
-                  <div className="flex items-start space-x-3">
-                    <div className="text-2xl">💌</div>
-                    <div>
-                      <h3 className="font-medium text-stone-800">Description</h3>
-                      <p className="text-stone-600">{event.description}</p>
-                    </div>
-                  </div>
-                )}
+            {/* Tab Navigation */}
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200">
+              <div className="border-b border-stone-200">
+                <nav className="flex space-x-8 px-6">
+                  <button
+                    onClick={() => setActiveTab('overview')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === 'overview'
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                    }`}
+                  >
+                    📊 Overview
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('guests')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === 'guests'
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                    }`}
+                  >
+                    👥 Guests
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('messages')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === 'messages'
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                    }`}
+                  >
+                    💬 Messages
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('events')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === 'events'
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                    }`}
+                  >
+                    🎉 Event Setup
+                  </button>
+                </nav>
               </div>
-            </div>
+              
+              <div className="p-6">
+                {activeTab === 'overview' && (
+                  <div className="space-y-6">
+                    {/* Event Details Card */}
+                    <div>
+                      <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
+                        <span className="text-2xl mr-2">📅</span>
+                        Event Details
+                      </h2>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-3">
+                          <div className="text-2xl">📅</div>
+                          <div>
+                            <h3 className="font-medium text-stone-800">Date</h3>
+                            <p className="text-stone-600">{formatEventDate(event.event_date)}</p>
+                          </div>
+                        </div>
 
-            {/* Quick Stats */}
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-              <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
-                <span className="text-2xl mr-2">📊</span>
-                Quick Stats
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-                  <div className="text-2xl font-bold text-blue-600">{guestCount}</div>
-                  <div className="text-sm text-blue-800">Total Guests</div>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-                  <div className="text-2xl font-bold text-green-600">{rsvpCounts.attending}</div>
-                  <div className="text-sm text-green-800">Attending</div>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200">
-                  <div className="text-2xl font-bold text-amber-600">{rsvpCounts.maybe}</div>
-                  <div className="text-sm text-amber-800">Maybe</div>
-                </div>
-                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
-                  <div className="text-2xl font-bold text-purple-600">{rsvpCounts.pending}</div>
-                  <div className="text-sm text-purple-800">Pending</div>
-                </div>
+                        {event.location && (
+                          <div className="flex items-start space-x-3">
+                            <div className="text-2xl">📍</div>
+                            <div>
+                              <h3 className="font-medium text-stone-800">Location</h3>
+                              <p className="text-stone-600">{event.location}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {event.description && (
+                          <div className="flex items-start space-x-3">
+                            <div className="text-2xl">💌</div>
+                            <div>
+                              <h3 className="font-medium text-stone-800">Description</h3>
+                              <p className="text-stone-600">{event.description}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Stats */}
+                    <div>
+                      <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
+                        <span className="text-2xl mr-2">📊</span>
+                        Quick Stats
+                      </h2>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+                          <div className="text-2xl font-bold text-blue-600">{guestCount}</div>
+                          <div className="text-sm text-blue-800">Total Guests</div>
+                        </div>
+                        <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
+                          <div className="text-2xl font-bold text-green-600">{rsvpCounts.attending}</div>
+                          <div className="text-sm text-green-800">Attending</div>
+                        </div>
+                        <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200">
+                          <div className="text-2xl font-bold text-amber-600">{rsvpCounts.maybe}</div>
+                          <div className="text-sm text-amber-800">Maybe</div>
+                        </div>
+                        <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+                          <div className="text-2xl font-bold text-purple-600">{rsvpCounts.pending}</div>
+                          <div className="text-sm text-purple-800">Pending</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'guests' && (
+                  <GuestManagement 
+                    eventId={eventId}
+                    onGuestUpdated={() => {
+                      // Refresh guest stats
+                      window.location.reload()
+                    }}
+                  />
+                )}
+
+                {activeTab === 'messages' && (
+                  <MessageComposer 
+                    eventId={eventId}
+                    onMessageScheduled={() => {
+                      // Show success message or refresh
+                      console.log('Message scheduled successfully!')
+                    }}
+                  />
+                )}
+
+                {activeTab === 'events' && (
+                  <SubEventManagement 
+                    eventId={eventId}
+                    onSubEventUpdated={() => {
+                      // Refresh data
+                      console.log('Sub-event updated!')
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -309,6 +398,7 @@ export default function EventDashboardPage() {
                 <Button 
                   className="w-full justify-start"
                   variant="outline"
+                  onClick={() => setActiveTab('guests')}
                 >
                   <span className="mr-2">👥</span>
                   Manage Guests
@@ -317,9 +407,19 @@ export default function EventDashboardPage() {
                 <Button 
                   className="w-full justify-start"
                   variant="outline"
+                  onClick={() => setActiveTab('messages')}
                 >
-                  <span className="mr-2">📧</span>
-                  Send Invitations
+                  <span className="mr-2">💬</span>
+                  Send Messages
+                </Button>
+                
+                <Button 
+                  className="w-full justify-start"
+                  variant="outline"
+                  onClick={() => setActiveTab('events')}
+                >
+                  <span className="mr-2">🎉</span>
+                  Setup Events
                 </Button>
                 
                 <Button 
@@ -328,14 +428,6 @@ export default function EventDashboardPage() {
                 >
                   <span className="mr-2">📸</span>
                   View Gallery
-                </Button>
-                
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                >
-                  <span className="mr-2">💬</span>
-                  Messages
                 </Button>
               </div>
             </div>
@@ -375,17 +467,46 @@ export default function EventDashboardPage() {
                   🚀 Getting Started
                 </h3>
                 <p className="text-stone-600 text-sm mb-4">
-                  Ready to invite your guests? Start by importing your guest list from a spreadsheet.
+                  Ready to invite your guests? Start by setting up your events and importing your guest list.
                 </p>
-                <Button 
-                  size="sm"
-                  onClick={() => setShowImportWizard(true)}
-                  className="w-full"
-                >
-                  Import Your Guest List
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    size="sm"
+                    onClick={() => setActiveTab('events')}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    1. Setup Events
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => setShowImportWizard(true)}
+                    className="w-full"
+                  >
+                    2. Import Guest List
+                  </Button>
+                </div>
               </div>
             )}
+
+            {/* Current Stats Summary */}
+            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+              <h3 className="text-lg font-semibold text-stone-800 mb-4">📊 Quick Stats</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-600">Total Guests:</span>
+                  <span className="font-medium text-stone-800">{guestCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-600">Attending:</span>
+                  <span className="font-medium text-green-600">{rsvpCounts.attending}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-600">Pending:</span>
+                  <span className="font-medium text-amber-600">{rsvpCounts.pending}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

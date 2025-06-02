@@ -120,13 +120,25 @@ export const handleValidationError = (
 
 // Error logging
 export const logError = (error: AppError | Error, context?: string): void => {
+  // Handle malformed error objects
+  if (!error) {
+    console.error('🚨 Error logged: null or undefined error received', { context })
+    return
+  }
+
+  // Ensure we have at least some error information
+  const message = error.message || 'Unknown error'
+  const stack = error instanceof Error ? error.stack : undefined
+  
   const errorInfo = {
-    message: error.message,
-    stack: error instanceof Error ? error.stack : undefined,
+    message,
+    stack,
     context,
     timestamp: new Date().toISOString(),
     userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server',
     url: typeof window !== 'undefined' ? window.location.href : 'server',
+    // Include the full error object for debugging
+    originalError: error,
   }
 
   // In development, log to console
