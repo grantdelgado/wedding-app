@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
+import Image from 'next/image'
 import { supabase, uploadFile, getPublicUrl, deleteFile } from '@/lib/supabase'
 import { cn, formatEventDate } from '@/lib/utils'
 import { LoadingPage } from '@/components/ui/LoadingSpinner'
@@ -87,7 +88,7 @@ export default function EditEventPage() {
           event_time: timeStr,
           location: eventData.location || '',
           description: eventData.description || '',
-          is_public: eventData.is_public,
+          is_public: eventData.is_public ?? true,
         })
         
         if (eventData.header_image_url) {
@@ -319,7 +320,7 @@ export default function EditEventPage() {
       <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-8">
           <h1 className="text-2xl font-semibold text-stone-800 mb-4">Event Not Found</h1>
-          <p className="text-stone-600 mb-6">The event you're trying to edit could not be found.</p>
+          <p className="text-stone-600 mb-6">The event you&apos;re trying to edit could not be found.</p>
           <button
             onClick={() => router.push('/host/dashboard')}
             className="bg-stone-800 text-white font-medium py-3 px-6 rounded-lg hover:bg-stone-900 transition-colors"
@@ -470,9 +471,11 @@ export default function EditEventPage() {
                 <div className="mb-4">
                   <p className="text-sm text-stone-600 mb-2">Current image:</p>
                   <div className="relative">
-                    <img
+                    <Image
                       src={currentImageUrl}
                       alt="Current event header"
+                      width={800}
+                      height={192}
                       className="w-full h-48 object-cover rounded-lg"
                     />
                     <button
@@ -521,9 +524,11 @@ export default function EditEventPage() {
               {imagePreview && (
                 <div className="relative">
                   <p className="text-sm text-stone-600 mb-2">New image:</p>
-                  <img
+                  <Image
                     src={imagePreview}
                     alt="New event header preview"
+                    width={800}
+                    height={192}
                     className="w-full h-48 object-cover rounded-lg"
                   />
                   <button

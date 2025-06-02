@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
+import Image from 'next/image'
 import { supabase, uploadFile, getPublicUrl } from '@/lib/supabase'
 import { cn, formatEventDate } from '@/lib/utils'
 import type { Database } from '@/app/reference/supabase.types'
@@ -386,9 +387,11 @@ export default function CreateEventPage() {
                 </div>
               ) : (
                 <div className="relative">
-                  <img
+                  <Image
                     src={imagePreview}
                     alt="Event header preview"
+                    width={800}
+                    height={256}
                     className="w-full h-64 object-cover rounded-lg"
                   />
                   <button

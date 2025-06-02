@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { LoadingPage } from '@/components/ui/LoadingSpinner'
@@ -191,10 +192,12 @@ export default function EventDashboardPage() {
       {event.header_image_url && (
         <div className="relative">
           <div className="h-64 md:h-80 lg:h-96 overflow-hidden">
-            <img
+            <Image
               src={event.header_image_url}
               alt={`${event.title} header`}
               className="w-full h-full object-cover"
+              width={1280}
+              height={720}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
             <div className="absolute bottom-6 left-6 text-white">
