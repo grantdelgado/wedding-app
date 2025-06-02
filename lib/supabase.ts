@@ -77,6 +77,51 @@ export const signOut = async () => {
   return { error }
 }
 
+// User profile helpers for phone-based auth
+export const createUserProfile = async (userData: {
+  phone: string
+  full_name?: string
+  email?: string
+}) => {
+  const { user } = await getCurrentUser()
+  if (!user) throw new Error('No authenticated user')
+
+  return await supabase
+    .from('users')
+    .insert({
+      id: user.id,
+      email: userData.email || user.email || '',
+      phone: userData.phone,
+      full_name: userData.full_name || null,
+    })
+    .select()
+    .single()
+}
+
+export const updateUserProfile = async (userData: {
+  phone?: string
+  full_name?: string
+  email?: string
+}) => {
+  const { user } = await getCurrentUser()
+  if (!user) throw new Error('No authenticated user')
+
+  return await supabase
+    .from('users')
+    .update(userData)
+    .eq('id', user.id)
+    .select()
+    .single()
+}
+
+export const getUserByPhone = async (phone: string) => {
+  return await supabase
+    .from('users')
+    .select('*')
+    .eq('phone', phone)
+    .single()
+}
+
 // Storage helpers
 export const uploadFile = async (
   bucket: string,
@@ -84,9 +129,27 @@ export const uploadFile = async (
   file: File,
   options?: { cacheControl?: string; upsert?: boolean }
 ) => {
-  return await supabase.storage
-    .from(bucket)
-    .upload(path, file, options)
+  try {
+    console.log(`Uploading file to ${bucket}/${path}`, {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+    })
+    
+    const result = await supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        ...options
+      })
+    
+    console.log('Upload result:', result)
+    return result
+  } catch (error) {
+    console.error('Upload exception:', error)
+    throw error
+  }
 }
 
 export const getPublicUrl = (bucket: string, path: string) => {
@@ -139,6 +202,30 @@ export const getEventGuests = async (eventId: string) => {
     `)
     .eq('event_id', eventId)
     .order('created_at', { ascending: true })
+}
+
+// Guest lookup by phone for event access
+export const findGuestByPhone = async (eventId: string, phone: string) => {
+  return await supabase
+    .from('event_guests')
+    .select('*')
+    .eq('event_id', eventId)
+    .eq('phone', phone)
+    .single()
+}
+
+// Link guest record to authenticated user account
+export const linkGuestToUser = async (eventId: string, phone: string) => {
+  const { user } = await getCurrentUser()
+  if (!user) throw new Error('No authenticated user')
+
+  return await supabase
+    .from('event_guests')
+    .update({ user_id: user.id })
+    .eq('event_id', eventId)
+    .eq('phone', phone)
+    .select()
+    .single()
 }
 
 export const createEventGuest = async (guestData: EventGuestInsert) => {

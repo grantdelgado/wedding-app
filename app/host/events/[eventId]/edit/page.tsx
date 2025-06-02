@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useCallback, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
-import { supabase, uploadFile, getPublicUrl } from '@/lib/supabase'
+import { supabase, uploadFile, getPublicUrl, deleteFile } from '@/lib/supabase'
 import { cn, formatEventDate } from '@/lib/utils'
+import { LoadingPage } from '@/components/ui/LoadingSpinner'
 import type { Database } from '@/app/reference/supabase.types'
 
-type EventInsert = Database['public']['Tables']['events']['Insert']
+type Event = Database['public']['Tables']['events']['Row']
+type EventUpdate = Database['public']['Tables']['events']['Update']
 
 interface FormErrors {
   title?: string
@@ -17,14 +19,19 @@ interface FormErrors {
   image?: string
 }
 
-export default function CreateEventPage() {
+export default function EditEventPage() {
+  const params = useParams()
   const router = useRouter()
+  const eventId = params.eventId as string
+  
+  // Original event data
+  const [originalEvent, setOriginalEvent] = useState<Event | null>(null)
   
   // Form state
   const [formData, setFormData] = useState({
     title: '',
     event_date: '',
-    event_time: '15:00', // Default to 3 PM
+    event_time: '',
     location: '',
     description: '',
     is_public: true,
@@ -33,12 +40,71 @@ export default function CreateEventPage() {
   // Image upload state
   const [headerImage, setHeaderImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
+  const [currentImageUrl, setCurrentImageUrl] = useState<string>('')
   const [imageUploadProgress, setImageUploadProgress] = useState(0)
+  const [shouldDeleteImage, setShouldDeleteImage] = useState(false)
   
   // UI state
   const [isLoading, setIsLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
   const [errors, setErrors] = useState<FormErrors>({})
   const [formMessage, setFormMessage] = useState('')
+
+  // Load existing event data
+  useEffect(() => {
+    const fetchEvent = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session?.user) {
+          router.push('/login')
+          return
+        }
+
+        const { data: eventData, error: eventError } = await supabase
+          .from('events')
+          .select('*')
+          .eq('id', eventId)
+          .eq('host_user_id', session.user.id)
+          .single()
+
+        if (eventError) {
+          console.error('Error fetching event:', eventError)
+          router.push('/host/dashboard')
+          return
+        }
+
+        setOriginalEvent(eventData)
+        
+        // Parse event_date into date and time components
+        const eventDateTime = new Date(eventData.event_date)
+        const dateStr = eventDateTime.toISOString().split('T')[0]
+        const timeStr = eventDateTime.toTimeString().slice(0, 5)
+        
+        setFormData({
+          title: eventData.title,
+          event_date: dateStr,
+          event_time: timeStr,
+          location: eventData.location || '',
+          description: eventData.description || '',
+          is_public: eventData.is_public,
+        })
+        
+        if (eventData.header_image_url) {
+          setCurrentImageUrl(eventData.header_image_url)
+        }
+        
+        setPageLoading(false)
+      } catch (error) {
+        console.error('Unexpected error:', error)
+        router.push('/host/dashboard')
+      }
+    }
+
+    if (eventId) {
+      fetchEvent()
+    }
+  }, [eventId, router])
 
   // Validation
   const validateForm = (): boolean => {
@@ -52,14 +118,6 @@ export default function CreateEventPage() {
     
     if (!formData.event_date) {
       newErrors.event_date = 'Event date is required'
-    } else {
-      const selectedDate = new Date(formData.event_date)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      if (selectedDate < today) {
-        newErrors.event_date = 'Event date cannot be in the past'
-      }
     }
     
     if (!formData.event_time) {
@@ -84,6 +142,7 @@ export default function CreateEventPage() {
       }
       
       setHeaderImage(file)
+      setShouldDeleteImage(false)
       setErrors(prev => ({ ...prev, image: undefined }))
       
       // Create preview
@@ -113,11 +172,24 @@ export default function CreateEventPage() {
     }
   }
 
+  const removeCurrentImage = () => {
+    setCurrentImageUrl('')
+    setShouldDeleteImage(true)
+  }
+
+  const removeNewImage = () => {
+    setHeaderImage(null)
+    setImagePreview('')
+    setImageUploadProgress(0)
+    setShouldDeleteImage(false)
+    setErrors(prev => ({ ...prev, image: undefined }))
+  }
+
   // Form submission
-  const handleCreateEvent = async (e: React.FormEvent) => {
+  const handleUpdateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!validateForm()) {
+    if (!validateForm() || !originalEvent) {
       return
     }
     
@@ -128,15 +200,15 @@ export default function CreateEventPage() {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
       if (sessionError || !session?.user) {
-        setFormMessage('You must be logged in to create an event.')
+        setFormMessage('You must be logged in to update an event.')
         setIsLoading(false)
         return
       }
 
       const userId = session.user.id
-      let headerImageUrl: string | null = null
+      let headerImageUrl: string | null = currentImageUrl || null
 
-      // Upload image if provided
+      // Handle image upload if new image is provided
       if (headerImage) {
         setImageUploadProgress(10)
         const fileExt = headerImage.name.split('.').pop()
@@ -169,6 +241,16 @@ export default function CreateEventPage() {
           const { data: urlData } = getPublicUrl('event-images', fileName)
           headerImageUrl = urlData.publicUrl
           setImageUploadProgress(80)
+          
+          // Delete old image if it exists and is different
+          if (originalEvent.header_image_url && originalEvent.header_image_url !== headerImageUrl) {
+            try {
+              const oldPath = originalEvent.header_image_url.split('/').slice(-2).join('/')
+              await deleteFile('event-images', oldPath)
+            } catch (deleteError) {
+              console.warn('Failed to delete old image:', deleteError)
+            }
+          }
         } catch (uploadError) {
           console.error('Image upload exception:', uploadError)
           setFormMessage(`Failed to upload image: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}. Please try again.`)
@@ -176,37 +258,48 @@ export default function CreateEventPage() {
           return
         }
       }
+      
+      // Handle image deletion if requested
+      if (shouldDeleteImage && originalEvent.header_image_url) {
+        try {
+          const oldPath = originalEvent.header_image_url.split('/').slice(-2).join('/')
+          await deleteFile('event-images', oldPath)
+          headerImageUrl = null
+        } catch (deleteError) {
+          console.warn('Failed to delete image:', deleteError)
+        }
+      }
 
       // Combine date and time
       const eventDateTime = `${formData.event_date}T${formData.event_time}:00`
 
-      // Create the event
-      const eventData: EventInsert = {
+      // Update the event
+      const eventData: EventUpdate = {
         title: formData.title.trim(),
         event_date: eventDateTime,
         location: formData.location.trim() || null,
         description: formData.description.trim() || null,
         header_image_url: headerImageUrl,
-        host_user_id: userId,
         is_public: formData.is_public,
       }
 
-      const { data: newEvent, error: insertError } = await supabase
+      const { data: updatedEvent, error: updateError } = await supabase
         .from('events')
-        .insert(eventData)
+        .update(eventData)
+        .eq('id', eventId)
         .select()
         .single()
 
       setImageUploadProgress(100)
 
-      if (insertError) {
-        console.error('Error creating event:', insertError)
-        setFormMessage('Something went wrong creating your event. Please try again.')
-      } else if (newEvent) {
-        setFormMessage('Wedding hub created successfully!')
-        // Navigate to the event dashboard
+      if (updateError) {
+        console.error('Error updating event:', updateError)
+        setFormMessage('Something went wrong updating your event. Please try again.')
+      } else if (updatedEvent) {
+        setFormMessage('Event updated successfully!')
+        // Navigate back to the event dashboard
         setTimeout(() => {
-          router.push(`/host/events/${newEvent.id}/dashboard`)
+          router.push(`/host/events/${eventId}/dashboard`)
         }, 1500)
       }
     } catch (error) {
@@ -217,11 +310,25 @@ export default function CreateEventPage() {
     }
   }
 
-  const removeImage = () => {
-    setHeaderImage(null)
-    setImagePreview('')
-    setImageUploadProgress(0)
-    setErrors(prev => ({ ...prev, image: undefined }))
+  if (pageLoading) {
+    return <LoadingPage message="Loading event details..." />
+  }
+
+  if (!originalEvent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-8">
+          <h1 className="text-2xl font-semibold text-stone-800 mb-4">Event Not Found</h1>
+          <p className="text-stone-600 mb-6">The event you're trying to edit could not be found.</p>
+          <button
+            onClick={() => router.push('/host/dashboard')}
+            className="bg-stone-800 text-white font-medium py-3 px-6 rounded-lg hover:bg-stone-900 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -230,16 +337,16 @@ export default function CreateEventPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-semibold text-stone-800 mb-4 tracking-tight">
-            Create Your Wedding Hub
+            Edit Event Details
           </h1>
           <p className="text-lg text-stone-600">
-            Set up your wedding communication center and start connecting with your guests
+            Update your event information and settings
           </p>
         </div>
 
         {/* Form Card */}
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
-          <form onSubmit={handleCreateEvent} className="space-y-8">
+          <form onSubmit={handleUpdateEvent} className="space-y-8">
             
             {/* Event Details Section */}
             <div>
@@ -358,7 +465,31 @@ export default function CreateEventPage() {
                 Header Image
               </h2>
               
-              {!imagePreview ? (
+              {/* Current Image Display */}
+              {currentImageUrl && !shouldDeleteImage && (
+                <div className="mb-4">
+                  <p className="text-sm text-stone-600 mb-2">Current image:</p>
+                  <div className="relative">
+                    <img
+                      src={currentImageUrl}
+                      alt="Current event header"
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={removeCurrentImage}
+                      className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* New Image Upload */}
+              {!imagePreview && (!currentImageUrl || shouldDeleteImage) && (
                 <div
                   {...getRootProps()}
                   className={cn(
@@ -376,7 +507,7 @@ export default function CreateEventPage() {
                     </svg>
                     <div className="mt-4">
                       <p className="text-lg font-medium text-stone-700">
-                        {isDragActive ? 'Drop your image here' : 'Upload a beautiful header image'}
+                        {isDragActive ? 'Drop your image here' : 'Upload a new header image'}
                       </p>
                       <p className="text-stone-500 mt-1">
                         Drag & drop or click to browse • PNG, JPG up to 10MB
@@ -384,16 +515,20 @@ export default function CreateEventPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              )}
+              
+              {/* New Image Preview */}
+              {imagePreview && (
                 <div className="relative">
+                  <p className="text-sm text-stone-600 mb-2">New image:</p>
                   <img
                     src={imagePreview}
-                    alt="Event header preview"
-                    className="w-full h-64 object-cover rounded-lg"
+                    alt="New event header preview"
+                    className="w-full h-48 object-cover rounded-lg"
                   />
                   <button
                     type="button"
-                    onClick={removeImage}
+                    onClick={removeNewImage}
                     className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -454,7 +589,7 @@ export default function CreateEventPage() {
               <div className="bg-gradient-to-r from-purple-50 to-rose-50 rounded-lg p-6 border border-purple-100">
                 <h3 className="text-lg font-semibold text-stone-800 mb-3 flex items-center">
                   <span className="text-xl mr-2">👁️</span>
-                  Event Preview
+                  Updated Event Preview
                 </h3>
                 <div className="space-y-2 text-sm">
                   <p><strong>Name:</strong> {formData.title}</p>
@@ -475,10 +610,10 @@ export default function CreateEventPage() {
                 {isLoading ? (
                   <div className="flex items-center">
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Creating Wedding Hub...
+                    Updating Event...
                   </div>
                 ) : (
-                  'Create Wedding Hub'
+                  'Update Event'
                 )}
               </button>
             </div>
@@ -500,11 +635,11 @@ export default function CreateEventPage() {
         {/* Back Link */}
         <div className="text-center mt-6">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`/host/events/${eventId}/dashboard`)}
             className="text-stone-600 hover:text-stone-800 font-medium transition-colors"
             disabled={isLoading}
           >
-            ← Back to Dashboard
+            ← Cancel and Back to Dashboard
           </button>
         </div>
       </div>

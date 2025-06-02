@@ -187,6 +187,34 @@ export default function EventDashboardPage() {
         </div>
       </div>
 
+      {/* Header Image Section */}
+      {event.header_image_url && (
+        <div className="relative">
+          <div className="h-64 md:h-80 lg:h-96 overflow-hidden">
+            <img
+              src={event.header_image_url}
+              alt={`${event.title} header`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+            <div className="absolute bottom-6 left-6 text-white">
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-2 drop-shadow-lg">
+                {event.title}
+              </h2>
+              <p className="text-lg md:text-xl opacity-90 drop-shadow">
+                {formatEventDate(event.event_date)}
+              </p>
+              {event.location && (
+                <p className="text-base md:text-lg opacity-90 drop-shadow flex items-center mt-1">
+                  <span className="mr-1">📍</span>
+                  {event.location}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -317,7 +345,10 @@ export default function EventDashboardPage() {
               </h2>
               
               <div className="space-y-2">
-                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
+                <button 
+                  onClick={() => router.push(`/host/events/${eventId}/edit`)}
+                  className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm"
+                >
                   <span className="mr-2">✏️</span>
                   Edit Event Details
                 </button>

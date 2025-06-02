@@ -1,14 +1,14 @@
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { z } from 'zod'
-import { isValidEmail } from './utils'
+import { isValidEmail, isValidPhoneNumber, normalizePhoneNumber } from './utils'
 import type { EventGuestInsert } from './supabase'
 
-// Guest import validation schema
+// Guest import validation schema - phone is now required, name is optional
 export const guestImportSchema = z.object({
-  guest_name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  phone: z.string().min(1, 'Phone number is required').refine(isValidPhoneNumber, 'Invalid phone number format'),
+  guest_name: z.string().max(100, 'Name too long').optional().or(z.literal('')),
   guest_email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().max(20, 'Phone too long').optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes too long').optional().or(z.literal('')),
   guest_tags: z.array(z.string()).optional(),
   rsvp_status: z.enum(['Attending', 'Declined', 'Maybe', 'Pending']).optional(),
@@ -16,11 +16,11 @@ export const guestImportSchema = z.object({
 
 export type GuestImportData = z.infer<typeof guestImportSchema>
 
-// Common column mappings that users might have
+// Common column mappings that users might have - phone is now the primary identifier
 export const COMMON_COLUMN_MAPPINGS = {
+  phone: ['phone', 'phone number', 'mobile', 'cell', 'telephone', 'contact', 'cell phone', 'mobile number'],
   name: ['name', 'full name', 'guest name', 'first name', 'last name', 'full_name', 'guest_name'],
   email: ['email', 'email address', 'e-mail', 'guest email', 'guest_email'],
-  phone: ['phone', 'phone number', 'mobile', 'cell', 'telephone', 'contact'],
   notes: ['notes', 'comments', 'remarks', 'special requests', 'dietary restrictions'],
   tags: ['tags', 'group', 'category', 'table', 'side', 'family', 'friends'],
   rsvp: ['rsvp', 'status', 'response', 'attending', 'rsvp_status'],
@@ -170,7 +170,7 @@ export const autoDetectColumnMapping = (headers: string[]): ColumnMappingType =>
   headers.forEach(header => {
     const normalizedHeader = header.toLowerCase().trim()
     
-    // Check each mapping category
+    // Check each mapping category - prioritize phone detection
     for (const [field, patterns] of Object.entries(COMMON_COLUMN_MAPPINGS)) {
       if (patterns.some(pattern => normalizedHeader.includes(pattern))) {
         mapping[header] = field as keyof GuestImportData
@@ -197,6 +197,7 @@ export const validateImportedGuests = (
   }> = []
   
   const seenEmails = new Set<string>()
+  const seenPhones = new Set<string>()
   let duplicateEmails = 0
   
   data.forEach((row, index) => {
@@ -210,6 +211,23 @@ export const validateImportedGuests = (
       const value = row[csvColumn]?.trim() || ''
       
       switch (guestField) {
+        case 'phone':
+          guestData.phone = value
+          // Validate phone number
+          if (!value) {
+            errors.push('Phone number is required')
+          } else if (!isValidPhoneNumber(value)) {
+            errors.push(`Invalid phone number format: ${value}`)
+          } else {
+            // Check for duplicate phones
+            const normalizedPhone = normalizePhoneNumber(value)
+            if (seenPhones.has(normalizedPhone)) {
+              errors.push(`Duplicate phone number: ${value}`)
+            } else {
+              seenPhones.add(normalizedPhone)
+            }
+          }
+          break
         case 'guest_name':
           guestData.guest_name = value
           break
@@ -227,9 +245,6 @@ export const validateImportedGuests = (
               errors.push(`Invalid email format: ${value}`)
             }
           }
-          break
-        case 'phone':
-          guestData.phone = value
           break
         case 'notes':
           guestData.notes = value
@@ -257,6 +272,11 @@ export const validateImportedGuests = (
           break
       }
     })
+    
+    // If no name provided, use phone number as fallback display name
+    if (!guestData.guest_name && guestData.phone) {
+      guestData.guest_name = guestData.phone
+    }
     
     // Validate the guest data
     const validation = guestImportSchema.safeParse(guestData)
@@ -299,9 +319,9 @@ export const convertToEventGuests = (
 ): EventGuestInsert[] => {
   return guests.map(guest => ({
     event_id: eventId,
-    guest_name: guest.guest_name,
+    phone: normalizePhoneNumber(guest.phone), // Store in normalized format
+    guest_name: guest.guest_name || guest.phone, // Fallback to phone if no name
     guest_email: guest.guest_email || null,
-    phone: guest.phone || null,
     notes: guest.notes || null,
     guest_tags: guest.guest_tags || null,
     rsvp_status: guest.rsvp_status || 'Pending',
@@ -335,11 +355,11 @@ export const validateImportFile = (file: File): { valid: boolean; error?: string
  * Generate sample CSV template
  */
 export const generateSampleCSV = (): string => {
-  const headers = ['Name', 'Email', 'Phone', 'Notes', 'Tags', 'RSVP Status']
+  const headers = ['Phone', 'Name', 'Email', 'Notes', 'Tags', 'RSVP Status']
   const sampleData = [
-    ['John Smith', 'john@example.com', '(555) 123-4567', 'Vegetarian meal', 'Family,Groomsmen', 'Attending'],
-    ['Jane Doe', 'jane@example.com', '(555) 987-6543', 'Plus one: Mike Johnson', 'Friends', 'Pending'],
-    ['Bob Wilson', 'bob@example.com', '', 'Wheelchair accessible seating', 'Coworkers', 'Maybe'],
+    ['(555) 123-4567', 'John Smith', 'john@example.com', 'Vegetarian meal', 'Family,Groomsmen', 'Attending'],
+    ['(555) 987-6543', 'Jane Doe', 'jane@example.com', 'Plus one: Mike Johnson', 'Friends', 'Pending'],
+    ['(555) 555-0123', 'Bob Wilson', 'bob@example.com', 'Wheelchair accessible seating', 'Coworkers', 'Maybe'],
   ]
   
   const csvContent = [headers, ...sampleData]
