@@ -8,9 +8,6 @@ import { useMessages } from '@/hooks/messaging'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Database } from '@/app/reference/supabase.types'
 
-type Guest = Database['public']['Tables']['event_guests']['Row']
-type Media = Database['public']['Tables']['media']['Row']
-type Message = Database['public']['Tables']['messages']['Row']
 type SubEvent = Database['public']['Tables']['sub_events']['Row']
 
 interface EventAnalyticsProps {

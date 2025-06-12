@@ -57,7 +57,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
           if (!senderError && senderData) {
             sendersMap.set(senderId, senderData)
           }
-        } catch (err) {
+        } catch {
           // Silently handle individual sender fetch failures
         }
       }
