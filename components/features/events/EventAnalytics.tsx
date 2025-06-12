@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useGuests } from '@/hooks/guests'
+import { useEventMedia } from '@/hooks/media'
+import { useMessages } from '@/hooks/messaging'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Database } from '@/app/reference/supabase.types'
 
@@ -14,12 +17,7 @@ interface EventAnalyticsProps {
   eventId: string
 }
 
-interface AnalyticsData {
-  guests: Guest[]
-  media: Media[]
-  messages: Message[]
-  subEvents: SubEvent[]
-}
+
 
 interface RSVPStats {
   attending: number
@@ -31,66 +29,52 @@ interface RSVPStats {
 }
 
 export function EventAnalytics({ eventId }: EventAnalyticsProps) {
-  const [data, setData] = useState<AnalyticsData | null>(null)
+  // Use our refactored hooks
+  const { guests, loading: guestsLoading, error: guestsError } = useGuests(eventId)
+  const { media, loading: mediaLoading, error: mediaError } = useEventMedia(eventId)
+  const { messages, loading: messagesLoading, error: messagesError } = useMessages(eventId)
+  
+  const [subEvents, setSubEvents] = useState<SubEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Combine loading states
+  const isLoading = guestsLoading || mediaLoading || messagesLoading || loading
+  const hasError = guestsError || mediaError || messagesError || error
 
   useEffect(() => {
-    async function fetchAnalyticsData() {
+    async function fetchSubEvents() {
       try {
         setLoading(true)
         setError(null)
 
-        // Fetch all data in parallel
-        const [guestsRes, mediaRes, messagesRes, subEventsRes] = await Promise.all([
-          supabase
-            .from('event_guests')  
-            .select('*')
-            .eq('event_id', eventId),
-          supabase
-            .from('media')
-            .select('*')
-            .eq('event_id', eventId),
-          supabase
-            .from('messages')
-            .select('*')
-            .eq('event_id', eventId),
-          supabase
-            .from('sub_events')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('sort_order')
-        ])
+        // Only fetch sub-events since other data comes from hooks
+        const { data: subEventsData, error: subEventsError } = await supabase
+          .from('sub_events')
+          .select('*')
+          .eq('event_id', eventId)
+          .order('sort_order')
 
-        // Check for errors
-        if (guestsRes.error) throw guestsRes.error
-        if (mediaRes.error) throw mediaRes.error
-        if (messagesRes.error) throw messagesRes.error
-        if (subEventsRes.error) throw subEventsRes.error
+        if (subEventsError) throw subEventsError
 
-        setData({
-          guests: guestsRes.data || [],
-          media: mediaRes.data || [],
-          messages: messagesRes.data || [],
-          subEvents: subEventsRes.data || []
-        })
+        setSubEvents(subEventsData || [])
       } catch (err) {
-        console.error('Error fetching analytics:', err)
-        setError('Failed to load analytics data')
+        console.error('Error fetching sub-events:', err)
+        setError('Failed to load sub-events data')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchAnalyticsData()
+    fetchSubEvents()
   }, [eventId])
 
   const rsvpStats = useMemo((): RSVPStats => {
-    if (!data?.guests) {
+    if (!guests) {
       return { attending: 0, declined: 0, maybe: 0, pending: 0, total: 0, responseRate: 0 }
     }
 
-    const stats = data.guests.reduce(
+    const stats = guests.reduce(
       (acc, guest) => {
         const status = guest.rsvp_status?.toLowerCase() || 'pending'
         if (status === 'attending') acc.attending++
@@ -108,34 +92,34 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
       : 0
 
     return stats
-  }, [data?.guests])
+  }, [guests])
 
   const engagementStats = useMemo(() => {
-    if (!data) return { totalUploads: 0, totalMessages: 0, activeGuests: 0 }
+    if (!media || !messages) return { totalUploads: 0, totalMessages: 0, activeGuests: 0 }
 
     // Calculate unique guests who have engaged (uploaded media or sent messages)
-    const uploaderIds = new Set(data.media.map(m => m.uploader_user_id).filter(Boolean))
-    const senderIds = new Set(data.messages.map(m => m.sender_user_id).filter(Boolean))
+    const uploaderIds = new Set(media.map(m => m.uploader_user_id).filter(Boolean))
+    const senderIds = new Set(messages.map(m => m.sender_user_id).filter(Boolean))
     const activeGuests = new Set([...uploaderIds, ...senderIds]).size
 
     return {
-      totalUploads: data.media.length,
-      totalMessages: data.messages.length,
+      totalUploads: media.length,
+      totalMessages: messages.length,
       activeGuests
     }
-  }, [data])
+  }, [media, messages])
 
   const recentActivity = useMemo(() => {
-    if (!data) return []
+    if (!media || !messages) return []
 
     const activities = [
-      ...data.media.map(m => ({
+      ...media.map(m => ({
         id: m.id,
         type: 'upload' as const,
         timestamp: m.created_at,
         description: 'New photo uploaded'
       })),
-      ...data.messages.map(m => ({
+      ...messages.map(m => ({
         id: m.id,
         type: 'message' as const,
         timestamp: m.created_at,
@@ -146,9 +130,9 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
     return activities
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5)
-  }, [data])
+  }, [media, messages])
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
         <div className="flex items-center justify-center py-12">
@@ -158,12 +142,14 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
     )
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
         <div className="text-center py-12">
           <div className="text-red-500 mb-2">⚠️</div>
-          <p className="text-stone-600">{error}</p>
+          <p className="text-stone-600">
+            {typeof hasError === 'string' ? hasError : hasError?.message || 'Failed to load analytics data'}
+          </p>
         </div>
       </div>
     )
@@ -267,7 +253,7 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
       </div>
 
       {/* Sub-Events Overview */}
-      {data?.subEvents && data.subEvents.length > 0 && (
+      {subEvents && subEvents.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
           <h2 className="text-xl font-semibold text-stone-800 flex items-center mb-6">
             <span className="text-2xl mr-2">🗓️</span>
@@ -275,7 +261,7 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
           </h2>
           
           <div className="space-y-3">
-            {data.subEvents.map((subEvent) => (
+            {subEvents.map((subEvent) => (
               <div key={subEvent.id} className="flex items-center justify-between p-4 bg-stone-50 rounded-xl">
                 <div>
                   <div className="font-medium text-stone-800">{subEvent.name}</div>

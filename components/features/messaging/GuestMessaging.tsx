@@ -24,23 +24,54 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
 
   const fetchMessages = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      // First, try to fetch messages without the join to avoid RLS issues
+      const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:public_user_profiles!messages_sender_user_id_fkey(*)
-        `)
+        .select('*')
         .eq('event_id', eventId)
         .order('created_at', { ascending: true })
 
-      if (error) {
-        console.error('❌ Error fetching messages:', error)
+      if (messagesError) {
+        console.error('❌ Error fetching messages:', messagesError)
+        setMessages([])
+        setLoading(false)
         return
       }
 
-      setMessages(data as MessageWithSender[] || [])
+      // Then try to fetch sender info for each unique sender
+      const uniqueSenderIds = Array.from(new Set(
+        messagesData?.map(m => m.sender_user_id).filter(Boolean) || []
+      ))
+
+      const sendersMap = new Map<string, PublicUserProfile>()
+
+      // Fetch sender profiles separately to handle RLS gracefully
+      for (const senderId of uniqueSenderIds) {
+        try {
+          const { data: senderData, error: senderError } = await supabase
+            .from('public_user_profiles')
+            .select('*')
+            .eq('id', senderId)
+            .single()
+
+          if (!senderError && senderData) {
+            sendersMap.set(senderId, senderData)
+          }
+        } catch (err) {
+          // Silently handle individual sender fetch failures
+        }
+      }
+
+      // Combine messages with sender info
+      const messagesWithSenders: MessageWithSender[] = (messagesData || []).map(message => ({
+        ...message,
+        sender: message.sender_user_id ? sendersMap.get(message.sender_user_id) || null : null
+      }))
+
+      setMessages(messagesWithSenders)
     } catch (err) {
       console.error('❌ Unexpected error fetching messages:', err)
+      setMessages([])
     } finally {
       setLoading(false)
     }

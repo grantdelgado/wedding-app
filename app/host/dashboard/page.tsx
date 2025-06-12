@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation' // Added for potential redirects
 import { supabase } from '@/lib/supabase'    // Added for session
-import { useEvents } from '@/app/lib/useEvents' // Added useEvents hook
+import { useHostEvents } from '@/hooks/events'
 
 export default function HostDashboardPage() { // Renamed component for clarity
   const router = useRouter()
@@ -29,8 +29,8 @@ export default function HostDashboardPage() { // Renamed component for clarity
     getSession()
   }, [router])
 
-  // Use the useEvents hook with the fetched userId
-  const { hostedEvents, loading, error } = useEvents(currentUserId)
+  // Use the useHostEvents hook with the fetched userId
+  const { hostedEvents, loading, error } = useHostEvents(currentUserId)
 
   if (loading) {
     return (

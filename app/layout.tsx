@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AuthSessionWatcher from './components/AuthSessionWatcher'
-import ProfileAvatar from './components/ProfileAvatar';
+import { AuthSessionWatcher, ProfileAvatar } from '@/components/features/auth'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { APP_CONFIG } from '@/lib/constants';
 import { Suspense } from 'react';

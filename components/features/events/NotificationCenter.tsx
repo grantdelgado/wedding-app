@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useGuests } from '@/hooks/guests'
+import { useEventMedia } from '@/hooks/media'
+import { useMessages } from '@/hooks/messaging'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatRelativeTime } from '@/lib/utils'
 // Database types import removed as it's not used
@@ -23,6 +26,11 @@ interface NotificationItem {
 }
 
 export function NotificationCenter({ eventId }: NotificationCenterProps) {
+  // Use our refactored hooks instead of direct queries
+  const { guests } = useGuests(eventId)
+  const { media } = useEventMedia(eventId)
+  const { messages } = useMessages(eventId)
+  
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [isOpen, setIsOpen] = useState(false)
@@ -33,32 +41,10 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
       const now = new Date()
       const dayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
 
-      // Fetch recent activity
-      const [guestsRes, mediaRes, messagesRes] = await Promise.all([
-        supabase
-          .from('event_guests')
-          .select('*')
-          .eq('event_id', eventId)
-          .gte('updated_at', dayAgo.toISOString())
-          .order('updated_at', { ascending: false }),
-        supabase
-          .from('media')
-          .select('*, uploader:public_user_profiles!media_uploader_user_id_fkey(*)')
-          .eq('event_id', eventId)
-          .gte('created_at', dayAgo.toISOString())
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('messages')
-          .select('*, sender:public_user_profiles!messages_sender_user_id_fkey(*)')
-          .eq('event_id', eventId)
-          .gte('created_at', dayAgo.toISOString())
-          .order('created_at', { ascending: false })
-      ])
-
       const notificationItems: NotificationItem[] = []
 
-      // Process guest updates (RSVP changes)
-      guestsRes.data?.forEach((guest) => {
+      // Process guest updates (RSVP changes) - using hook data
+      guests?.forEach((guest) => {
         if (guest.rsvp_status && guest.updated_at > dayAgo.toISOString()) {
           notificationItems.push({
             id: `guest-${guest.id}`,
@@ -73,23 +59,25 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
         }
       })
 
-      // Process media uploads
-      mediaRes.data?.forEach((media) => {
-        const uploaderName = (media.uploader as { full_name?: string })?.full_name || 'A guest'
-        notificationItems.push({
-          id: `media-${media.id}`,
-          type: 'media',
-          title: 'New Photo Shared',
-          description: `${uploaderName} shared a ${media.media_type === 'video' ? 'video' : 'photo'}`,
-          timestamp: media.created_at,
-          isRead: false,
-          icon: media.media_type === 'video' ? '🎥' : '📸',
-          color: 'text-purple-600'
-        })
+      // Process media uploads - using hook data
+      media?.forEach((mediaItem) => {
+        if (mediaItem.created_at > dayAgo.toISOString()) {
+          const uploaderName = mediaItem.uploader?.full_name || 'A guest'
+          notificationItems.push({
+            id: `media-${mediaItem.id}`,
+            type: 'media',
+            title: 'New Photo Shared',
+            description: `${uploaderName} shared a ${mediaItem.media_type === 'video' ? 'video' : 'photo'}`,
+            timestamp: mediaItem.created_at,
+            isRead: false,
+            icon: mediaItem.media_type === 'video' ? '🎥' : '📸',
+            color: 'text-purple-600'
+          })
+        }
       })
 
-      // Process messages (from guests only)
-      messagesRes.data?.forEach((message) => {
+      // Process messages (from guests only) - using hook data
+      messages?.forEach((message) => {
         if (message.message_type !== 'announcement') { // Don't notify about host announcements
           const senderName = (message.sender as { full_name?: string })?.full_name || 'A guest'
           notificationItems.push({
@@ -115,7 +103,7 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
     } finally {
       setLoading(false)
     }
-  }, [eventId])
+  }, [guests, media, messages])
 
   useEffect(() => {
     fetchNotifications()

@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { useGuestEvent } from '@/app/lib/useGuestEvent'
-import GuestPhotoGallery from '@/app/components/GuestPhotoGallery'
-import GuestMessaging from '@/app/components/GuestMessaging'
-import EventSchedule from '@/app/components/EventSchedule'
+import { useEventDetails } from '@/hooks/events'
+import { GuestPhotoGallery } from '@/components/features/media'
+import { GuestMessaging } from '@/components/features/messaging'
+import { EventSchedule } from '@/components/features/scheduling'
 
 export default function GuestEventHomePage() {
   const params = useParams()
@@ -46,7 +46,7 @@ export default function GuestEventHomePage() {
   }, [])
 
   // Use the custom hook to fetch event and guest data
-  const { event, guestInfo, loading, error, updateRSVP } = useGuestEvent(eventId, currentUserId)
+  const { event, guestInfo, loading, error, updateRSVP } = useEventDetails(eventId, currentUserId)
 
   const handleRSVPUpdate = async (status: string) => {
     const result = await updateRSVP(status)
@@ -74,7 +74,7 @@ export default function GuestEventHomePage() {
       <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
           <h1 className="text-2xl font-semibold text-stone-800 mb-2">We couldn&apos;t find this celebration</h1>
-          <p className="text-stone-600 mb-6">{error || 'This wedding hub may have been moved or is no longer available.'}</p>
+          <p className="text-stone-600 mb-6">{error?.message || 'This wedding hub may have been moved or is no longer available.'}</p>
           <button
             onClick={() => router.push('/select-event')}
             className="px-6 py-3 bg-stone-800 text-white rounded-lg hover:bg-stone-900 transition-colors font-medium"

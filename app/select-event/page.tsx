@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { useEvents } from '@/app/lib/useEvents'
+import { useHostEvents, useGuestEvents } from '@/hooks/events'
 import type { Database } from '@/app/reference/supabase.types'
 
 type Event = Database['public']['Tables']['events']['Row']
@@ -64,7 +64,11 @@ export default function SelectEventPage() {
     getSession()
   }, [router])
 
-  const { hostedEvents, guestEvents, loading, error: fetchError } = useEvents(currentUserId)
+  const { hostedEvents, loading: hostLoading, error: hostError } = useHostEvents(currentUserId)
+  const { guestEvents, loading: guestLoading, error: guestError } = useGuestEvents(currentUserId)
+  
+  const loading = hostLoading || guestLoading
+  const fetchError = hostError || guestError
 
   const handleSelect = (eventId: string, role: 'host' | 'guest') => {
     const path =

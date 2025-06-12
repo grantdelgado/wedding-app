@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useGuests } from '@/hooks/guests'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Database } from '@/app/reference/supabase.types'
@@ -20,6 +21,9 @@ interface GuestManagementProps {
 }
 
 export function GuestManagement({ eventId, onGuestUpdated }: GuestManagementProps) {
+  // Use our new guests hook
+  const { guests: hookGuests, loading: guestsLoading, error: guestsError, refetch } = useGuests(eventId)
+  
   const [guests, setGuests] = useState<GuestWithAssignments[]>([])
   const [subEvents, setSubEvents] = useState<SubEvent[]>([])
   const [loading, setLoading] = useState(true)

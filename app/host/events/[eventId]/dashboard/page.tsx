@@ -6,16 +6,18 @@ import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { LoadingPage } from '@/components/ui/LoadingSpinner'
-import { GuestImportWizard } from '@/components/guest-import'
+import { GuestImportWizard } from '@/components/features/guests'
 import { formatEventDate } from '@/lib/utils'
 import type { Database } from '@/app/reference/supabase.types'
-import { GuestManagement } from '@/components/host-dashboard/GuestManagement'
-import { MessageComposer } from '@/components/host-dashboard/MessageComposer'
-import { SubEventManagement } from '@/components/host-dashboard/SubEventManagement'
-import { EventAnalytics } from '@/components/host-dashboard/EventAnalytics'
-import { QuickActions } from '@/components/host-dashboard/QuickActions'
-import { NotificationCenter } from '@/components/host-dashboard/NotificationCenter'
-import { WelcomeBanner } from '@/components/host-dashboard/WelcomeBanner'
+import { 
+  GuestManagement,
+  MessageComposer,
+  SubEventManagement,
+  EventAnalytics,
+  QuickActions,
+  NotificationCenter,
+  WelcomeBanner
+} from '@/components/features/events'
 
 type Event = Database['public']['Tables']['events']['Row']
 
