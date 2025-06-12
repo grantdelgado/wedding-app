@@ -12,6 +12,10 @@ import type { Database } from '@/app/reference/supabase.types'
 import { GuestManagement } from '@/components/host-dashboard/GuestManagement'
 import { MessageComposer } from '@/components/host-dashboard/MessageComposer'
 import { SubEventManagement } from '@/components/host-dashboard/SubEventManagement'
+import { EventAnalytics } from '@/components/host-dashboard/EventAnalytics'
+import { QuickActions } from '@/components/host-dashboard/QuickActions'
+import { NotificationCenter } from '@/components/host-dashboard/NotificationCenter'
+import { WelcomeBanner } from '@/components/host-dashboard/WelcomeBanner'
 
 type Event = Database['public']['Tables']['events']['Row']
 
@@ -27,6 +31,7 @@ export default function EventDashboardPage() {
     maybe: 0,
     pending: 0,
   })
+  const [subEventCount, setSubEventCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showImportWizard, setShowImportWizard] = useState(false)
@@ -85,6 +90,16 @@ export default function EventDashboardPage() {
           setRsvpCounts(counts)
         }
 
+        // Fetch sub-events count for welcome banner
+        const { data: subEventsData, error: subEventsError } = await supabase
+          .from('sub_events')
+          .select('id')
+          .eq('event_id', eventId)
+
+        if (!subEventsError) {
+          setSubEventCount(subEventsData?.length || 0)
+        }
+
         setLoading(false)
 
       } catch (err) {
@@ -112,6 +127,11 @@ export default function EventDashboardPage() {
 
   const handleImportSuccess = () => {
     setShowImportWizard(false)
+    // Refresh the page data
+    window.location.reload()
+  }
+
+  const handleDataRefresh = () => {
     // Refresh the page data
     window.location.reload()
   }
@@ -182,10 +202,13 @@ export default function EventDashboardPage() {
                   Host Dashboard
                 </p>
               </div>
-              <div className={`px-3 py-1 rounded-full border font-medium transition-all duration-300 ${
-                isScrolled ? 'text-xs' : 'text-sm'
-              } bg-purple-100 text-purple-800 border-purple-200`}>
-                Host
+              <div className="flex items-center space-x-3">
+                <NotificationCenter eventId={eventId} />
+                <div className={`px-3 py-1 rounded-full border font-medium transition-all duration-300 ${
+                  isScrolled ? 'text-xs' : 'text-sm'
+                } bg-purple-100 text-purple-800 border-purple-200`}>
+                  Host
+                </div>
               </div>
             </div>
           </div>
@@ -224,6 +247,15 @@ export default function EventDashboardPage() {
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Welcome Banner for new hosts */}
+        <WelcomeBanner
+          guestCount={guestCount}
+          hasSubEvents={subEventCount > 0}
+          onImportGuests={() => setShowImportWizard(true)}
+          onSetupEvents={() => setActiveTab('events')}
+          onSendFirstMessage={() => setActiveTab('messages')}
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
@@ -239,7 +271,7 @@ export default function EventDashboardPage() {
                         : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                     }`}
                   >
-                    📊 Overview
+                    📊 Analytics
                   </button>
                   <button
                     onClick={() => setActiveTab('guests')}
@@ -269,87 +301,20 @@ export default function EventDashboardPage() {
                         : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                     }`}
                   >
-                    🎉 Event Setup
+                    🎉 Schedule
                   </button>
                 </nav>
               </div>
               
               <div className="p-6">
                 {activeTab === 'overview' && (
-                  <div className="space-y-6">
-                    {/* Event Details Card */}
-                    <div>
-                      <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
-                        <span className="text-2xl mr-2">📅</span>
-                        Event Details
-                      </h2>
-                      
-                      <div className="space-y-4">
-                        <div className="flex items-start space-x-3">
-                          <div className="text-2xl">📅</div>
-                          <div>
-                            <h3 className="font-medium text-stone-800">Date</h3>
-                            <p className="text-stone-600">{formatEventDate(event.event_date)}</p>
-                          </div>
-                        </div>
-
-                        {event.location && (
-                          <div className="flex items-start space-x-3">
-                            <div className="text-2xl">📍</div>
-                            <div>
-                              <h3 className="font-medium text-stone-800">Location</h3>
-                              <p className="text-stone-600">{event.location}</p>
-                            </div>
-                          </div>
-                        )}
-
-                        {event.description && (
-                          <div className="flex items-start space-x-3">
-                            <div className="text-2xl">💌</div>
-                            <div>
-                              <h3 className="font-medium text-stone-800">Description</h3>
-                              <p className="text-stone-600">{event.description}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Quick Stats */}
-                    <div>
-                      <h2 className="text-xl font-semibold text-stone-800 mb-4 flex items-center">
-                        <span className="text-2xl mr-2">📊</span>
-                        Quick Stats
-                      </h2>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-                          <div className="text-2xl font-bold text-blue-600">{guestCount}</div>
-                          <div className="text-sm text-blue-800">Total Guests</div>
-                        </div>
-                        <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-                          <div className="text-2xl font-bold text-green-600">{rsvpCounts.attending}</div>
-                          <div className="text-sm text-green-800">Attending</div>
-                        </div>
-                        <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200">
-                          <div className="text-2xl font-bold text-amber-600">{rsvpCounts.maybe}</div>
-                          <div className="text-sm text-amber-800">Maybe</div>
-                        </div>
-                        <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
-                          <div className="text-2xl font-bold text-purple-600">{rsvpCounts.pending}</div>
-                          <div className="text-sm text-purple-800">Pending</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <EventAnalytics eventId={eventId} />
                 )}
 
                 {activeTab === 'guests' && (
                   <GuestManagement 
                     eventId={eventId}
-                    onGuestUpdated={() => {
-                      // Refresh guest stats
-                      window.location.reload()
-                    }}
+                    onGuestUpdated={handleDataRefresh}
                   />
                 )}
 
@@ -379,131 +344,83 @@ export default function EventDashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Quick Actions */}
+            <QuickActions 
+              eventId={eventId}
+              guestCount={guestCount}
+              pendingRSVPs={rsvpCounts.pending}
+              onActionComplete={handleDataRefresh}
+            />
+
+            {/* Event Summary Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
               <h2 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
-                <span className="text-xl mr-2">⚡</span>
-                Quick Actions
+                <span className="text-xl mr-2">📅</span>
+                Event Summary
               </h2>
               
-              <div className="space-y-3">
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                  onClick={() => setShowImportWizard(true)}
-                >
-                  <span className="mr-2">📤</span>
-                  Import Guest List
-                </Button>
-                
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                  onClick={() => setActiveTab('guests')}
-                >
-                  <span className="mr-2">👥</span>
-                  Manage Guests
-                </Button>
-                
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                  onClick={() => setActiveTab('messages')}
-                >
-                  <span className="mr-2">💬</span>
-                  Send Messages
-                </Button>
-                
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                  onClick={() => setActiveTab('events')}
-                >
-                  <span className="mr-2">🎉</span>
-                  Setup Events
-                </Button>
-                
-                <Button 
-                  className="w-full justify-start"
-                  variant="outline"
-                >
-                  <span className="mr-2">📸</span>
-                  View Gallery
-                </Button>
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="text-lg">📅</div>
+                  <div>
+                    <h3 className="font-medium text-stone-800 text-sm">Date</h3>
+                    <p className="text-stone-600 text-sm">{formatEventDate(event.event_date)}</p>
+                  </div>
+                </div>
+
+                {event.location && (
+                  <div className="flex items-start space-x-3">
+                    <div className="text-lg">📍</div>
+                    <div>
+                      <h3 className="font-medium text-stone-800 text-sm">Location</h3>
+                      <p className="text-stone-600 text-sm">{event.location}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-stone-200">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">{guestCount}</div>
+                    <div className="text-sm text-stone-600">Total Guests</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-emerald-600">{rsvpCounts.attending}</div>
+                      <div className="text-xs text-stone-600">Attending</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-amber-600">{rsvpCounts.maybe}</div>
+                      <div className="text-xs text-stone-600">Maybe</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-stone-600">{rsvpCounts.pending}</div>
+                      <div className="text-xs text-stone-600">Pending</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Event Settings */}
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
+            {/* Help & Support */}
+            <div className="bg-gradient-to-br from-purple-50 to-rose-50 rounded-2xl border border-purple-200 p-6">
               <h2 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
-                <span className="text-xl mr-2">⚙️</span>
-                Settings
+                <span className="text-xl mr-2">💝</span>
+                Need Help?
               </h2>
               
-              <div className="space-y-2">
-                <button 
-                  onClick={() => router.push(`/host/events/${eventId}/edit`)}
-                  className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm"
-                >
-                  <span className="mr-2">✏️</span>
-                  Edit Event Details
-                </button>
-                
-                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
-                  <span className="mr-2">🔒</span>
-                  Privacy Settings
-                </button>
-                
-                <button className="w-full py-2 px-3 text-left text-stone-700 hover:bg-stone-50 rounded-lg transition-colors text-sm">
-                  <span className="mr-2">📋</span>
-                  Export Data
-                </button>
-              </div>
-            </div>
-
-            {/* Getting Started */}
-            {guestCount === 0 && (
-              <div className="bg-gradient-to-br from-purple-50 to-rose-50 border border-purple-200 rounded-2xl p-6">
-                <h3 className="text-lg font-semibold text-stone-800 mb-2">
-                  🚀 Getting Started
-                </h3>
-                <p className="text-stone-600 text-sm mb-4">
-                  Ready to invite your guests? Start by setting up your events and importing your guest list.
+              <div className="space-y-3 text-sm">
+                <p className="text-stone-600">
+                  We&apos;re here to make your wedding planning seamless and beautiful.
                 </p>
+                
                 <div className="space-y-2">
-                  <Button 
-                    size="sm"
-                    onClick={() => setActiveTab('events')}
-                    className="w-full"
-                    variant="outline"
-                  >
-                    1. Setup Events
-                  </Button>
-                  <Button 
-                    size="sm"
-                    onClick={() => setShowImportWizard(true)}
-                    className="w-full"
-                  >
-                    2. Import Guest List
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Current Stats Summary */}
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-              <h3 className="text-lg font-semibold text-stone-800 mb-4">📊 Quick Stats</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-stone-600">Total Guests:</span>
-                  <span className="font-medium text-stone-800">{guestCount}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-stone-600">Attending:</span>
-                  <span className="font-medium text-green-600">{rsvpCounts.attending}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-stone-600">Pending:</span>
-                  <span className="font-medium text-amber-600">{rsvpCounts.pending}</span>
+                  <button className="text-purple-600 hover:text-purple-700 font-medium">
+                    📚 View Setup Guide
+                  </button>
+                  <br />
+                  <button className="text-purple-600 hover:text-purple-700 font-medium">
+                    💬 Contact Support
+                  </button>
                 </div>
               </div>
             </div>
