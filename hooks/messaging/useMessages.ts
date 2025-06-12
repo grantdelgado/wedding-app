@@ -64,7 +64,7 @@ export function useMessages(eventId: string | null): UseMessagesReturn {
 
       // Fetch sender profiles separately to handle RLS gracefully
       const uniqueSenderIds = Array.from(new Set(
-        messagesData?.map(m => m.sender_user_id).filter(Boolean) || []
+        messagesData?.map(m => m.sender_user_id).filter((id): id is string => Boolean(id)) || []
       ))
 
       const sendersMap = new Map<string, any>()

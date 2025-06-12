@@ -33,7 +33,7 @@ async function getCurrentUser() {
   try {
     const { data: { user }, error } = await supabase.auth.getUser()
     
-    if (error) {
+    if (error || !user) {
       console.log('❌ No authenticated user found')
       console.log('💡 You need to be logged into your app to get personalized test data.')
       console.log('📋 For now, you can use the SQL script approach instead.')
@@ -51,7 +51,7 @@ async function getCurrentUser() {
     console.log(`   +YOUR_PHONE_HERE → ${user.phone || '+1234567999'}`)
     
   } catch (err) {
-    console.log('❌ Error getting user:', err.message)
+    console.log('❌ Error getting user:', err instanceof Error ? err.message : 'Unknown error')
   }
 }
 

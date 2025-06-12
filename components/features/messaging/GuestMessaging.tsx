@@ -40,7 +40,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
 
       // Then try to fetch sender info for each unique sender
       const uniqueSenderIds = Array.from(new Set(
-        messagesData?.map(m => m.sender_user_id).filter(Boolean) || []
+        messagesData?.map(m => m.sender_user_id).filter((id): id is string => Boolean(id)) || []
       ))
 
       const sendersMap = new Map<string, PublicUserProfile>()
