@@ -16,7 +16,8 @@ import {
   EventAnalytics,
   QuickActions,
   NotificationCenter,
-  WelcomeBanner
+  WelcomeBanner,
+  SMSTestPanel
 } from '@/components/features/events'
 
 type Event = Database['public']['Tables']['events']['Row']
@@ -39,6 +40,20 @@ export default function EventDashboardPage() {
   const [showImportWizard, setShowImportWizard] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+
+  // Listen for navigation tab changes
+  useEffect(() => {
+    const handleNavigationTabChange = (event: CustomEvent) => {
+      const { tab } = event.detail
+      setActiveTab(tab)
+    }
+
+    window.addEventListener('navigationTabChange', handleNavigationTabChange as EventListener)
+    
+    return () => {
+      window.removeEventListener('navigationTabChange', handleNavigationTabChange as EventListener)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchEventData = async () => {
@@ -266,7 +281,13 @@ export default function EventDashboardPage() {
               <div className="border-b border-stone-200">
                 <nav className="flex space-x-8 px-6">
                   <button
-                    onClick={() => setActiveTab('overview')}
+                    onClick={() => {
+                      setActiveTab('overview')
+                      // Dispatch event for navigation sync
+                      window.dispatchEvent(new CustomEvent('dashboardTabChange', { 
+                        detail: { tab: 'overview' } 
+                      }))
+                    }}
                     className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === 'overview'
                         ? 'border-purple-500 text-purple-600'
@@ -276,7 +297,12 @@ export default function EventDashboardPage() {
                     📊 Analytics
                   </button>
                   <button
-                    onClick={() => setActiveTab('guests')}
+                    onClick={() => {
+                      setActiveTab('guests')
+                      window.dispatchEvent(new CustomEvent('dashboardTabChange', { 
+                        detail: { tab: 'guests' } 
+                      }))
+                    }}
                     className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === 'guests'
                         ? 'border-purple-500 text-purple-600'
@@ -286,7 +312,12 @@ export default function EventDashboardPage() {
                     👥 Guests
                   </button>
                   <button
-                    onClick={() => setActiveTab('messages')}
+                    onClick={() => {
+                      setActiveTab('messages')
+                      window.dispatchEvent(new CustomEvent('dashboardTabChange', { 
+                        detail: { tab: 'messages' } 
+                      }))
+                    }}
                     className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === 'messages'
                         ? 'border-purple-500 text-purple-600'
@@ -296,7 +327,12 @@ export default function EventDashboardPage() {
                     💬 Messages
                   </button>
                   <button
-                    onClick={() => setActiveTab('events')}
+                    onClick={() => {
+                      setActiveTab('events')
+                      window.dispatchEvent(new CustomEvent('dashboardTabChange', { 
+                        detail: { tab: 'events' } 
+                      }))
+                    }}
                     className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === 'events'
                         ? 'border-purple-500 text-purple-600'
@@ -321,13 +357,16 @@ export default function EventDashboardPage() {
                 )}
 
                 {activeTab === 'messages' && (
-                  <MessageComposer 
-                    eventId={eventId}
-                    onMessageScheduled={() => {
-                      // Show success message or refresh
-                      console.log('Message scheduled successfully!')
-                    }}
-                  />
+                  <div className="space-y-6">
+                    <MessageComposer 
+                      eventId={eventId}
+                      onMessageScheduled={() => {
+                        // Show success message or refresh
+                        console.log('Message scheduled successfully!')
+                      }}
+                    />
+                    <SMSTestPanel eventId={eventId} />
+                  </div>
                 )}
 
                 {activeTab === 'events' && (

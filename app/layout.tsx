@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthSessionWatcher, ProfileAvatar } from '@/components/features/auth'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { NavigationLayout } from '@/components/navigation';
 import { APP_CONFIG } from '@/lib/constants';
 import { Suspense } from 'react';
 
@@ -27,10 +28,12 @@ export default function RootLayout({
         <ErrorBoundary>
           <Suspense>
             <AuthSessionWatcher>
-              <div className="absolute top-4 right-4 z-50">
-                <ProfileAvatar />
-              </div>
-              {children}
+              <NavigationLayout>
+                <div className="absolute top-4 right-4 z-50">
+                  <ProfileAvatar />
+                </div>
+                {children}
+              </NavigationLayout>
             </AuthSessionWatcher>
           </Suspense>
         </ErrorBoundary>
