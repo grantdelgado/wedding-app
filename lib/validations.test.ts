@@ -3,10 +3,7 @@ import {
   emailSchema,
   eventCreateSchema,
   guestCreateSchema,
-  messageCreateSchema,
-  validateEventCreate,
-  validateGuestCreate,
-  validateMessageCreate
+  messageCreateSchema
 } from './validations'
 
 describe('Email Validation', () => {

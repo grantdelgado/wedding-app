@@ -84,8 +84,15 @@ afterAll(() => {
 // Test utilities
 export { mockSupabaseClient }
 
+// User interface for testing
+interface TestUser {
+  id: string
+  email: string
+  [key: string]: unknown
+}
+
 // Helper to mock authenticated user
-export const mockAuthenticatedUser = (user: any = { id: 'test-user-id', email: 'test@example.com' }) => {
+export const mockAuthenticatedUser = (user: TestUser = { id: 'test-user-id', email: 'test@example.com' }) => {
   mockSupabaseClient.auth.getUser.mockResolvedValue({ data: { user }, error: null })
   mockSupabaseClient.auth.getSession.mockResolvedValue({
     data: { session: { user, access_token: 'test-token' } },

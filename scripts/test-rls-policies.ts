@@ -11,9 +11,13 @@ import type { User } from '@supabase/supabase-js'
 
 interface TestUser {
   id: string
-  email: string
+  email: string | null
   phone: string
-  full_name: string
+  full_name: string | null
+  avatar_url?: string | null
+  created_at?: string
+  updated_at?: string
+  role?: string | null
 }
 
 interface TestEvent {
@@ -469,11 +473,11 @@ class RLSTestSuite {
     return data
   }
   
-  private async switchUser(email: string) {
+  private async switchUser(email: string | null) {
     // In a real implementation, you'd sign in as different users
     // For now, we'll simulate this by setting auth context
     // This is where you'd use Supabase auth to sign in as different test users
-    console.log(`🔄 Switching to user: ${email}`)
+    console.log(`🔄 Switching to user: ${email || 'unknown'}`)
   }
 }
 
