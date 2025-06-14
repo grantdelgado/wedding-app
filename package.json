@@ -17,7 +17,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:rls": "npx tsx scripts/test-rls-policies.ts",
     "db:test": "supabase db reset --local && npm run db:seed:test",
-    "db:seed:test": "npx tsx scripts/seed-test-data.ts"
+    "db:seed:test": "npx tsx scripts/seed-test-data.ts",
+    "setup:sms": "node scripts/setup-sms.js"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
