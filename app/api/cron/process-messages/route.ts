@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify the request is authorized (cron secret)
+    // Verify the request is authorized (cron secret OR development mode)
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
+    const isDevelopment = process.env.NODE_ENV === 'development'
     
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Allow access if it's development mode or has valid cron secret
+    if (!isDevelopment && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
