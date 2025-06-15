@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthSessionWatcher, ProfileAvatar } from '@/components/features/auth'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { NavigationLayout } from '@/components/navigation';
+import { NavigationLayout } from '@/components/features/navigation';
 import { APP_CONFIG } from '@/lib/constants';
 import { Suspense } from 'react';
 

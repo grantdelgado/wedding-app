@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, getCurrentUser, getCurrentSession, signOut } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
+import { getCurrentUser, getCurrentSession, signOut } from '@/services/auth'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 import type { User, Session } from '@supabase/supabase-js'

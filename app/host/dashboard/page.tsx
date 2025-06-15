@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation' // Added for potential redirects
-import { supabase } from '@/lib/supabase'    // Added for session
+import { supabase } from '@/lib/supabase/client'    // Added for session
 import { useHostEvents } from '@/hooks/events'
 
 export default function HostDashboardPage() { // Renamed component for clarity

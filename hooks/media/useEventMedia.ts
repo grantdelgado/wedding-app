@@ -1,13 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase/client'
 import { 
-  supabase, 
-  getEventMedia, 
-  createMedia, 
-  subscribeToEventMedia,
   type Media,
   type MediaInsert,
   type MediaWithUploader 
-} from '@/lib/supabase'
+} from '@/lib/supabase/types'
+import { getEventMedia, uploadMedia as uploadMediaService } from '@/services/media'
+import { subscribeToEventMedia } from '@/lib/supabase/media'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 
@@ -15,7 +14,13 @@ interface UseEventMediaReturn {
   media: MediaWithUploader[]
   loading: boolean
   error: AppError | null
-  uploadMedia: (mediaData: MediaInsert) => Promise<{ success: boolean; error: string | null }>
+  uploadMedia: (mediaData: {
+    event_id: string
+    storage_path: string
+    media_type: 'photo' | 'video'
+    uploader_user_id: string
+    caption?: string
+  }) => Promise<{ success: boolean; error: string | null }>
   refetch: () => Promise<void>
 }
 
@@ -57,7 +62,12 @@ export function useEventMedia(eventId: string | null): UseEventMediaReturn {
         throw new Error(mediaError.message || 'Failed to fetch media')
       }
 
-      setMedia(data || [])
+      // Map the data to match MediaWithUploader type
+      const mappedData = (data || []).map(item => ({
+        ...item,
+        uploader: item.uploader || null
+      })) as MediaWithUploader[]
+      setMedia(mappedData)
       setLoading(false)
     } catch (err) {
       console.warn('⚠️ useEventMedia fetchMedia error:', err)
@@ -66,9 +76,15 @@ export function useEventMedia(eventId: string | null): UseEventMediaReturn {
     }
   }, [eventId])
 
-  const uploadMedia = useCallback(async (mediaData: MediaInsert) => {
+  const uploadMedia = useCallback(async (mediaData: {
+    event_id: string
+    storage_path: string
+    media_type: 'photo' | 'video'
+    uploader_user_id: string
+    caption?: string
+  }) => {
     const wrappedUpload = withErrorHandling(async () => {
-      const { data, error } = await createMedia(mediaData)
+      const { data, error } = await uploadMediaService(mediaData)
 
       if (error) {
         throw new Error('Failed to upload media')

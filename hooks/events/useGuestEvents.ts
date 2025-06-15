@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, type Event, type EventGuestWithEvent } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
+import { type Event, type EventGuestWithEvent } from '@/lib/supabase/types'
+import { getGuestEvents } from '@/services/events'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 

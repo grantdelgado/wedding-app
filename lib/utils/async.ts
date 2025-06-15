@@ -1,4 +1,4 @@
-import { UI_CONFIG } from '../constants'
+import { UI_CONFIG } from '@/lib/constants'
 
 // Async utilities
 export const debounce = <T extends (...args: unknown[]) => unknown>(

@@ -16,9 +16,9 @@ import {
   EventAnalytics,
   QuickActions,
   NotificationCenter,
-  WelcomeBanner,
   SMSTestPanel
-} from '@/components/features/events'
+} from '@/components/features/host-dashboard'
+import { WelcomeBanner } from '@/components/features/events'
 
 type Event = Database['public']['Tables']['events']['Row']
 

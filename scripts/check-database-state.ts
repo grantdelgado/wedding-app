@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '../app/reference/supabase.types'
+import type { Database } from '@/app/reference/supabase.types'
 import * as fs from 'fs'
 import * as path from 'path'
 

@@ -1,10 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { 
-  supabase,
-  getEventGuests, 
-  linkGuestToUser,
-  type EventGuestWithUser 
-} from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
+import { type EventGuestWithUser } from '@/lib/supabase/types'
+import { getEventGuests } from '@/services/events'
+import { linkGuestToUser } from '@/lib/supabase/guests'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 

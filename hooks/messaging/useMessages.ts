@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase/client'
 import { 
-  supabase,
-  getEventMessages, 
-  createMessage, 
-  subscribeToEventMessages,
   type MessageInsert,
   type MessageWithSender 
-} from '@/lib/supabase'
+} from '@/lib/supabase/types'
+import { getEventMessages, sendMessage as sendMessageService } from '@/services/messaging'
+import { subscribeToEventMessages } from '@/lib/supabase/messaging'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 
@@ -14,7 +13,12 @@ interface UseMessagesReturn {
   messages: MessageWithSender[]
   loading: boolean
   error: AppError | null
-  sendMessage: (messageData: MessageInsert) => Promise<{ success: boolean; error: string | null }>
+  sendMessage: (messageData: {
+    event_id: string
+    sender_user_id: string
+    content: string
+    message_type?: 'text' | 'announcement' | 'system'
+  }) => Promise<{ success: boolean; error: string | null }>
   refetch: () => Promise<void>
 }
 
@@ -102,9 +106,14 @@ export function useMessages(eventId: string | null): UseMessagesReturn {
     }
   }, [eventId])
 
-  const sendMessage = useCallback(async (messageData: MessageInsert) => {
+  const sendMessage = useCallback(async (messageData: {
+    event_id: string
+    sender_user_id: string
+    content: string
+    message_type?: 'text' | 'announcement' | 'system'
+  }) => {
     const wrappedSend = withErrorHandling(async () => {
-      const { data, error } = await createMessage(messageData)
+      const { data, error } = await sendMessageService(messageData)
 
       if (error) {
         throw new Error('Failed to send message')

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, type Event } from '@/lib/supabase'
+import { type Event } from '@/lib/supabase/types'
+import { getHostEvents } from '@/services/events'
 import { logError, type AppError } from '@/lib/error-handling'
 import { withErrorHandling } from '@/lib/error-handling'
 
@@ -27,11 +28,7 @@ export function useHostEvents(userId: string | null): UseHostEventsReturn {
       setError(null)
 
       // Fetch hosted events
-      const { data: hostData, error: hostError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('host_user_id', userId)
-        .order('event_date', { ascending: true })
+      const { data: hostData, error: hostError } = await getHostEvents(userId)
 
       if (hostError) {
         throw hostError

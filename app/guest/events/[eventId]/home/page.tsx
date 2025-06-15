@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import { useEventDetails } from '@/hooks/events'
 import { GuestPhotoGallery } from '@/components/features/media'
 import { GuestMessaging } from '@/components/features/messaging'

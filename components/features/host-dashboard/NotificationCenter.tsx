@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import { useGuests } from '@/hooks/guests'
 import { useEventMedia } from '@/hooks/media'
 import { useMessages } from '@/hooks/messaging'

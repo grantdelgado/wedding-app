@@ -1,4 +1,4 @@
-import { UI_CONFIG } from '../constants'
+import { UI_CONFIG } from '@/lib/constants'
 
 // File utilities
 export const formatFileSize = (bytes: number): string => {

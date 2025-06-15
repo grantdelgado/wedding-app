@@ -17,7 +17,7 @@ import {
   type ImportValidationResult,
   type GuestImportData
 } from '@/lib/guest-import'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 
 interface GuestImportWizardProps {
   eventId: string
