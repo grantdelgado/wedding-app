@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { formatPhoneNumber, isValidPhoneNumber } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('')
@@ -10,6 +11,33 @@ export default function LoginPage() {
   const [step, setStep] = useState<'phone' | 'verify'>('phone')
   const [message, setMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+
+  // Development bypass - only available in development mode
+  const isDevelopment = process.env.NODE_ENV === 'development'
+
+  const handleDevelopmentBypass = async (phoneNumber: string) => {
+    setIsLoading(true)
+    setMessage('Development bypass: Simulating authentication...')
+    
+    try {
+      // In development, we'll use a simple approach - redirect to event selection
+      // This matches the normal auth flow in AuthSessionWatcher
+      console.log('Development bypass for phone:', phoneNumber)
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
+      
+      setMessage('Development bypass successful! Redirecting...')
+      setTimeout(() => {
+        router.push('/select-event')
+      }, 1500)
+      
+    } catch (err) {
+      console.error('Development bypass error:', err)
+      setMessage('Development bypass failed')
+    }
+    
+    setIsLoading(false)
+  }
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,6 +51,12 @@ export default function LoginPage() {
     if (!isValidPhoneNumber(cleanPhone)) {
       setMessage('Please enter a valid phone number')
       setIsLoading(false)
+      return
+    }
+    
+    // Development bypass check
+    if (isDevelopment) {
+      await handleDevelopmentBypass(phone)
       return
     }
     
@@ -102,6 +136,15 @@ export default function LoginPage() {
               : 'Enter the verification code we sent you'
             }
           </p>
+          
+          {/* Development Mode Indicator */}
+          {isDevelopment && (
+            <div className="mt-4 px-3 py-2 bg-amber-100 border border-amber-200 rounded-lg">
+              <p className="text-xs text-amber-800 font-medium">
+                🚧 Development Mode: Authentication bypass enabled
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Login Form */}
@@ -122,7 +165,10 @@ export default function LoginPage() {
                   disabled={isLoading}
                 />
                 <p className="text-xs text-stone-500 mt-1">
-                  We&apos;ll send you a verification code
+                  {isDevelopment 
+                    ? "In development mode, we'll bypass SMS verification"
+                    : "We'll send you a verification code"
+                  }
                 </p>
               </div>
               
@@ -131,7 +177,10 @@ export default function LoginPage() {
                 className="w-full py-3 px-4 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isLoading || !phone.trim()}
               >
-                {isLoading ? 'Sending...' : 'Send Verification Code'}
+                {isLoading 
+                  ? (isDevelopment ? 'Bypassing...' : 'Sending...') 
+                  : (isDevelopment ? 'Continue (Dev Bypass)' : 'Send Verification Code')
+                }
               </button>
             </form>
           ) : (
@@ -190,7 +239,10 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-stone-500 mt-6">
-          We&apos;ll send you a secure verification code
+          {isDevelopment 
+            ? "Development mode: SMS verification is bypassed"
+            : "We'll send you a secure verification code"
+          }
         </p>
       </div>
     </div>

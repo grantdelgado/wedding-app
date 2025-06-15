@@ -6,8 +6,12 @@ export default function ProfileAvatar() {
   const router = useRouter();
   const pathname = usePathname();
   
-  // Hide profile button on guest event pages and host event pages
-  if (pathname.startsWith('/guest/events/') || pathname.startsWith('/host/events/')) {
+  // Hide profile button on auth pages, guest event pages and host event pages
+  if (
+    pathname === '/login' || 
+    pathname.startsWith('/guest/events/') || 
+    pathname.startsWith('/host/events/')
+  ) {
     return null;
   }
   
