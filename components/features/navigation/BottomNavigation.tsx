@@ -1,38 +1,64 @@
 'use client'
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RoleSwitcher } from './RoleSwitcher'
 
-interface NavigationItem {
-  id: string
-  label: string
-  icon: string
-  href: string
-  badge?: number
-  isActive?: boolean
-}
-
 interface BottomNavigationProps {
-  eventId?: string
+  eventId: string
+  role: 'host' | 'guest'
   className?: string
 }
 
-export function BottomNavigation({ eventId, className }: BottomNavigationProps) {
+export function BottomNavigation({ eventId, role, className }: BottomNavigationProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const [unreadCount, setUnreadCount] = useState(0)
   const [userRole, setUserRole] = useState<'host' | 'guest' | null>(null)
   const [eventTitle, setEventTitle] = useState<string>('')
-  const [badges] = useState({
-    messages: 0,
-    guests: 0,
-    analytics: 0
-  })
 
-  // Determine user role and event context
+  useEffect(() => {
+    // Fetch unread message count (simplified - just get recent message count)
+    async function fetchUnreadCount() {
+      try {
+        const { data: messages } = await supabase
+          .from('messages_new')
+          .select('id')
+          .eq('event_id', eventId)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+
+        setUnreadCount(messages?.length || 0)
+      } catch (error) {
+        console.error('Error fetching unread count:', error)
+      }
+    }
+
+    fetchUnreadCount()
+
+    // Subscribe to real-time message updates
+    const channel = supabase
+      .channel(`messages:${eventId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages_new',
+          filter: `event_id=eq.${eventId}`
+        },
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [eventId])
+
   useEffect(() => {
     const determineUserRole = async () => {
       if (!eventId) return
@@ -55,7 +81,7 @@ export function BottomNavigation({ eventId, className }: BottomNavigationProps) 
         } else {
           // Check if user is guest of this event
           const { data: guestEvent } = await supabase
-            .from('event_guests')
+            .from('event_participants')
             .select('event:events(title)')
             .eq('event_id', eventId)
             .eq('user_id', user.id)
@@ -92,123 +118,50 @@ export function BottomNavigation({ eventId, className }: BottomNavigationProps) 
     }
   }, [])
 
-  // Get navigation items based on role
-  const getNavigationItems = (): NavigationItem[] => {
-    if (!eventId || !userRole) return []
-    
-    const currentTab = searchParams.get('tab') || 'overview'
+  const basePath = role === 'host' ? `/host/events/${eventId}` : `/guest/events/${eventId}`
 
-    if (userRole === 'host') {
-      return [
-        {
-          id: 'dashboard',
-          label: 'Dashboard',
-          icon: '🏠',
-          href: `/host/events/${eventId}/dashboard`,
-          isActive: pathname.includes('/dashboard') && currentTab === 'overview'
-        },
-        {
-          id: 'guests',
-          label: 'Guests',
-          icon: '👥',
-          href: `/host/events/${eventId}/dashboard?tab=guests`,
-          badge: badges.guests,
-          isActive: pathname.includes('/dashboard') && currentTab === 'guests'
-        },
-        {
-          id: 'messages',
-          label: 'Messages',
-          icon: '💬',
-          href: `/host/events/${eventId}/dashboard?tab=messages`,
-          badge: badges.messages,
-          isActive: pathname.includes('/dashboard') && currentTab === 'messages'
-        },
-        {
-          id: 'events',
-          label: 'Schedule',
-          icon: '🎉',
-          href: `/host/events/${eventId}/dashboard?tab=events`,
-          isActive: pathname.includes('/dashboard') && currentTab === 'events'
-        },
-        {
-          id: 'profile',
-          label: 'Profile',
-          icon: '👤',
-          href: '/profile',
-          isActive: pathname === '/profile'
-        }
-      ]
-    } else {
-      return [
-        {
-          id: 'event',
-          label: 'Event',
-          icon: '🎉',
-          href: `/guest/events/${eventId}/home`,
-          isActive: pathname.includes('/guest/events') && pathname.includes('/home')
-        },
-        {
-          id: 'photos',
-          label: 'Photos',
-          icon: '📸',
-          href: `/guest/events/${eventId}/photos`,
-          isActive: pathname.includes('/photos')
-        },
-        {
-          id: 'chat',
-          label: 'Chat',
-          icon: '💬',
-          href: `/guest/events/${eventId}/messages`,
-          badge: badges.messages,
-          isActive: pathname.includes('/messages')
-        },
-        {
-          id: 'guests',
-          label: 'Guests',
-          icon: '👥',
-          href: `/guest/events/${eventId}/guests`,
-          isActive: pathname.includes('/guests')
-        },
-        {
-          id: 'profile',
-          label: 'Profile',
-          icon: '👤',
-          href: '/profile',
-          isActive: pathname === '/profile'
-        }
-      ]
-    }
-  }
-
-  const navigationItems = getNavigationItems()
-
-  const handleNavigation = (item: NavigationItem) => {
-    if (item.href.includes('?tab=')) {
-      // Handle tab navigation within dashboard
-      const [basePath, queryString] = item.href.split('?')
-      const searchParams = new URLSearchParams(queryString)
-      const tabValue = searchParams.get('tab')
-      
-      // Navigate to dashboard and trigger tab change
-      router.push(basePath)
-      
-      // Use a small delay to ensure the page loads, then trigger tab change
-      setTimeout(() => {
-        const tabEvent = new CustomEvent('navigationTabChange', { 
-          detail: { tab: tabValue } 
-        })
-        window.dispatchEvent(tabEvent)
-      }, 100)
-    } else {
-      router.push(item.href)
-    }
-  }
+  const navItems = [
+    {
+      href: `${basePath}`,
+      icon: '🏠',
+      label: 'Home',
+      isActive: pathname === basePath
+    },
+    {
+      href: `${basePath}/photos`,
+      icon: '📸',
+      label: 'Photos',
+      isActive: pathname.includes('/photos')
+    },
+    {
+      href: `${basePath}/messages`,
+      icon: '💬',
+      label: 'Messages',
+      isActive: pathname.includes('/messages'),
+      badge: unreadCount > 0 ? unreadCount : undefined
+    },
+    ...(role === 'host' ? [
+      {
+        href: `${basePath}/dashboard`,
+        icon: '⚙️',
+        label: 'Manage',
+        isActive: pathname.includes('/dashboard')
+      }
+    ] : [
+      {
+        href: `${basePath}/rsvp`,
+        icon: '✅',
+        label: 'RSVP',
+        isActive: pathname.includes('/rsvp')
+      }
+    ])
+  ]
 
   // Don't render navigation on certain pages
   const hideNavigationPaths = ['/login', '/select-event', '/host/events/create', '/reset-password']
   const shouldHideNavigation = hideNavigationPaths.some(path => pathname.startsWith(path))
 
-  if (shouldHideNavigation || !userRole || navigationItems.length === 0) {
+  if (shouldHideNavigation || !userRole || navItems.length === 0) {
     return null
   }
 
@@ -270,10 +223,10 @@ export function BottomNavigation({ eventId, className }: BottomNavigationProps) 
       {/* Navigation Items */}
       <div className="px-2 py-2">
         <div className="flex items-center justify-around">
-          {navigationItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNavigation(item)}
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
               className={cn(
                 'flex flex-col items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 relative min-w-[60px]',
                 item.isActive ? styles.activeItem : styles.inactiveItem
@@ -288,7 +241,7 @@ export function BottomNavigation({ eventId, className }: BottomNavigationProps) 
               
               <span className="text-lg mb-1">{item.icon}</span>
               <span className="text-xs font-medium leading-none">{item.label}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </div>

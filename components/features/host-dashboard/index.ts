@@ -6,4 +6,4 @@ export { NotificationCenter } from './NotificationCenter'
 export { QuickActions } from './QuickActions'
 export { SMSAnnouncementModal } from './SMSAnnouncementModal'
 export { SMSTestPanel } from './SMSTestPanel'
-export { SubEventManagement } from './SubEventManagement' 
+ 

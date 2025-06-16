@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       communication_preferences: {
@@ -61,13 +86,6 @@ export type Database = {
             foreignKeyName: "communication_preferences_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "public_user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "communication_preferences_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -75,51 +93,57 @@ export type Database = {
       }
       event_guests: {
         Row: {
-          created_at: string
+          created_at: string | null
           event_id: string
           guest_email: string | null
           guest_name: string | null
           guest_tags: string[] | null
           id: string
+          invited_at: string | null
           notes: string | null
           phone: string
           phone_number_verified: boolean | null
           preferred_communication: string | null
+          role: string
           rsvp_status: string | null
           sms_opt_out: boolean | null
-          updated_at: string
+          updated_at: string | null
           user_id: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           event_id: string
           guest_email?: string | null
           guest_name?: string | null
           guest_tags?: string[] | null
           id?: string
+          invited_at?: string | null
           notes?: string | null
           phone: string
           phone_number_verified?: boolean | null
           preferred_communication?: string | null
+          role?: string
           rsvp_status?: string | null
           sms_opt_out?: boolean | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           event_id?: string
           guest_email?: string | null
           guest_name?: string | null
           guest_tags?: string[] | null
           id?: string
+          invited_at?: string | null
           notes?: string | null
           phone?: string
           phone_number_verified?: boolean | null
           preferred_communication?: string | null
+          role?: string
           rsvp_status?: string | null
           sms_opt_out?: boolean | null
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -134,21 +158,69 @@ export type Database = {
             foreignKeyName: "event_guests_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_participants: {
+        Row: {
+          created_at: string | null
+          event_id: string
+          id: string
+          invited_at: string | null
+          notes: string | null
+          role: string
+          rsvp_status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_id: string
+          id?: string
+          invited_at?: string | null
+          notes?: string | null
+          role?: string
+          rsvp_status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          invited_at?: string | null
+          notes?: string | null
+          role?: string
+          rsvp_status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_participants_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "public_user_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "event_guests_user_id_fkey"
+            foreignKeyName: "event_participants_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_new"
             referencedColumns: ["id"]
           },
         ]
       }
       events: {
         Row: {
-          created_at: string
+          created_at: string | null
           description: string | null
           event_date: string
           header_image_url: string | null
@@ -157,10 +229,10 @@ export type Database = {
           is_public: boolean | null
           location: string | null
           title: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           description?: string | null
           event_date: string
           header_image_url?: string | null
@@ -169,10 +241,10 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           title: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           description?: string | null
           event_date?: string
           header_image_url?: string | null
@@ -181,21 +253,68 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           title?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "events_host_user_id_fkey"
             columns: ["host_user_id"]
             isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events_new: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_date: string
+          header_image_url: string | null
+          host_user_id: string
+          id: string
+          is_public: boolean | null
+          location: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_date: string
+          header_image_url?: string | null
+          host_user_id: string
+          id?: string
+          is_public?: boolean | null
+          location?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_date?: string
+          header_image_url?: string | null
+          host_user_id?: string
+          id?: string
+          is_public?: boolean | null
+          location?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_new_host_user_id_fkey"
+            columns: ["host_user_id"]
+            isOneToOne: false
             referencedRelation: "public_user_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "events_host_user_id_fkey"
+            foreignKeyName: "events_new_host_user_id_fkey"
             columns: ["host_user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_new"
             referencedColumns: ["id"]
           },
         ]
@@ -248,38 +367,38 @@ export type Database = {
       media: {
         Row: {
           caption: string | null
-          created_at: string
+          created_at: string | null
           event_id: string
           id: string
           is_featured: boolean | null
           media_tags: string[] | null
           media_type: string
           storage_path: string
-          updated_at: string
+          updated_at: string | null
           uploader_user_id: string | null
         }
         Insert: {
           caption?: string | null
-          created_at?: string
+          created_at?: string | null
           event_id: string
           id?: string
           is_featured?: boolean | null
           media_tags?: string[] | null
           media_type: string
           storage_path: string
-          updated_at?: string
+          updated_at?: string | null
           uploader_user_id?: string | null
         }
         Update: {
           caption?: string | null
-          created_at?: string
+          created_at?: string | null
           event_id?: string
           id?: string
           is_featured?: boolean | null
           media_tags?: string[] | null
           media_type?: string
           storage_path?: string
-          updated_at?: string
+          updated_at?: string | null
           uploader_user_id?: string | null
         }
         Relationships: [
@@ -294,14 +413,59 @@ export type Database = {
             foreignKeyName: "media_uploader_user_id_fkey"
             columns: ["uploader_user_id"]
             isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_new: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          event_id: string
+          id: string
+          media_type: string
+          storage_path: string
+          uploader_user_id: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          event_id: string
+          id?: string
+          media_type: string
+          storage_path: string
+          uploader_user_id?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          media_type?: string
+          storage_path?: string
+          uploader_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_new_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_new_uploader_user_id_fkey"
+            columns: ["uploader_user_id"]
+            isOneToOne: false
             referencedRelation: "public_user_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "media_uploader_user_id_fkey"
+            foreignKeyName: "media_new_uploader_user_id_fkey"
             columns: ["uploader_user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_new"
             referencedColumns: ["id"]
           },
         ]
@@ -397,13 +561,6 @@ export type Database = {
             foreignKeyName: "message_deliveries_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "public_user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_deliveries_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -412,39 +569,39 @@ export type Database = {
       messages: {
         Row: {
           content: string
-          created_at: string
+          created_at: string | null
           event_id: string
           id: string
-          message_type: string
+          message_type: string | null
           parent_message_id: string | null
           recipient_tags: string[] | null
           recipient_user_id: string | null
           sender_user_id: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           content: string
-          created_at?: string
+          created_at?: string | null
           event_id: string
           id?: string
-          message_type?: string
+          message_type?: string | null
           parent_message_id?: string | null
           recipient_tags?: string[] | null
           recipient_user_id?: string | null
           sender_user_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           content?: string
-          created_at?: string
+          created_at?: string | null
           event_id?: string
           id?: string
-          message_type?: string
+          message_type?: string | null
           parent_message_id?: string | null
           recipient_tags?: string[] | null
           recipient_user_id?: string | null
           sender_user_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -465,13 +622,6 @@ export type Database = {
             foreignKeyName: "messages_recipient_user_id_fkey"
             columns: ["recipient_user_id"]
             isOneToOne: false
-            referencedRelation: "public_user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_recipient_user_id_fkey"
-            columns: ["recipient_user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -479,14 +629,56 @@ export type Database = {
             foreignKeyName: "messages_sender_user_id_fkey"
             columns: ["sender_user_id"]
             isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages_new: {
+        Row: {
+          content: string
+          created_at: string | null
+          event_id: string
+          id: string
+          message_type: string | null
+          sender_user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          event_id: string
+          id?: string
+          message_type?: string | null
+          sender_user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          message_type?: string | null
+          sender_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_new_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_new_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
             referencedRelation: "public_user_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "messages_sender_user_id_fkey"
+            foreignKeyName: "messages_new_sender_user_id_fkey"
             columns: ["sender_user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_new"
             referencedColumns: ["id"]
           },
         ]
@@ -570,13 +762,6 @@ export type Database = {
             foreignKeyName: "scheduled_messages_sender_user_id_fkey"
             columns: ["sender_user_id"]
             isOneToOne: false
-            referencedRelation: "public_user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduled_messages_sender_user_id_fkey"
-            columns: ["sender_user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -632,33 +817,60 @@ export type Database = {
       users: {
         Row: {
           avatar_url: string | null
-          created_at: string
+          created_at: string | null
           email: string | null
           full_name: string | null
           id: string
           phone: string
-          role: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           phone: string
-          role?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           phone?: string
-          role?: string | null
-          updated_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      users_new: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          phone: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          phone: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -684,8 +896,12 @@ export type Database = {
       }
     }
     Functions: {
-      current_user_guest_has_tags: {
-        Args: { p_event_id: string; p_tags_to_check: string[] }
+      can_access_event: {
+        Args: { p_event_id: string }
+        Returns: boolean
+      }
+      can_view_user_profile: {
+        Args: { target_user_id: string }
         Returns: boolean
       }
       get_ready_scheduled_messages: {
@@ -707,26 +923,35 @@ export type Database = {
           rsvp_status: string
         }[]
       }
-      is_event_guest: {
+      get_user_event_role: {
         Args: { p_event_id: string }
+        Returns: string
+      }
+      get_user_events: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          event_id: string
+          title: string
+          event_date: string
+          location: string
+          user_role: string
+          rsvp_status: string
+          is_primary_host: boolean
+        }[]
+      }
+      is_development_phone: {
+        Args: { p_phone: string }
         Returns: boolean
       }
       is_event_host: {
         Args: { p_event_id: string }
         Returns: boolean
       }
-      is_going_guest: {
-        Args: { eid: string }
-        Returns: boolean
-      }
-      is_user_guest_of_event: {
-        Args: { p_event_id: string; p_user_id: string }
-        Returns: boolean
-      }
     }
     Enums: {
       media_type_enum: "image" | "video"
       message_type_enum: "direct" | "announcement" | "channel"
+      rsvp_status_enum: "attending" | "declined" | "maybe" | "pending"
       user_role_enum: "guest" | "host" | "admin"
     }
     CompositeTypes: {
@@ -841,11 +1066,16 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       media_type_enum: ["image", "video"],
       message_type_enum: ["direct", "announcement", "channel"],
+      rsvp_status_enum: ["attending", "declined", "maybe", "pending"],
       user_role_enum: ["guest", "host", "admin"],
     },
   },
 } as const
+

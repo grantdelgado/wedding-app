@@ -10,12 +10,12 @@ interface UserEvent {
   title: string
   event_date: string
   location: string | null
-  user_role: 'host' | 'guest' | null
+  user_role: 'host' | 'guest'
   rsvp_status: string | null
   is_primary_host: boolean
 }
 
-export default function SelectEventPage() {
+export default function SimplifiedEventSelectionPage() {
   const [user, setUser] = useState<User | null>(null)
   const [events, setEvents] = useState<UserEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,7 +35,7 @@ export default function SelectEventPage() {
         
         setUser(user)
 
-        // Get user's events with roles using the simplified RLS function
+        // Get user's events with roles using the simplified function
         const { data: userEvents, error: eventsError } = await supabase
           .rpc('get_user_events')
 
@@ -58,28 +58,30 @@ export default function SelectEventPage() {
   }, [router])
 
   const handleEventSelect = (event: UserEvent) => {
-    if (!event.user_role) {
-      setError('Unable to determine your role for this event.')
-      return
-    }
-
-    // Route based on user's role for this event
+    // Simple role-based routing
     if (event.user_role === 'host') {
       router.push(`/host/events/${event.event_id}/dashboard`)
-    } else if (event.user_role === 'guest') {
-      router.push(`/guest/events/${event.event_id}/home`)
     } else {
-      setError('Invalid role for this event.')
+      router.push(`/guest/events/${event.event_id}/home`)
     }
+  }
+
+  const handleCreateEvent = () => {
+    router.push('/host/events/create')
+  }
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   const formatEventDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long', 
-        day: 'numeric'
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
       })
     } catch {
       return dateString
@@ -99,13 +101,13 @@ export default function SelectEventPage() {
   const getRSVPDisplay = (status: string | null) => {
     switch (status) {
       case 'attending':
-        return { text: 'Attending', color: 'bg-green-100 text-green-800' }
+        return { text: 'Attending', color: 'text-green-600' }
       case 'declined':
-        return { text: 'Declined', color: 'bg-red-100 text-red-800' }
+        return { text: 'Declined', color: 'text-red-600' }
       case 'maybe':
-        return { text: 'Maybe', color: 'bg-amber-100 text-amber-800' }
+        return { text: 'Maybe', color: 'text-amber-600' }
       default:
-        return { text: 'Pending', color: 'bg-stone-100 text-stone-800' }
+        return { text: 'Pending', color: 'text-stone-600' }
     }
   }
 
@@ -122,43 +124,46 @@ export default function SelectEventPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-rose-50 to-purple-50">
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-6 py-8 max-w-2xl">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold text-stone-800 mb-2 tracking-tight">
-            Welcome back
-          </h1>
-          <div className="w-16 h-px bg-gradient-to-r from-transparent via-rose-300 to-transparent mx-auto mb-4"></div>
-          <p className="text-stone-600">
-            Choose an event to access your personalized experience
-          </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-stone-800">Your Events</h1>
+            <p className="text-stone-600 text-sm">Choose an event to continue</p>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="px-4 py-2 text-stone-600 hover:text-stone-800 text-sm"
+          >
+            Sign Out
+          </button>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="max-w-md mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm text-center">{error}</p>
           </div>
         )}
 
         {/* Events List */}
-        <div className="max-w-2xl mx-auto">
+        <div className="space-y-4">
           {events.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">🎭</div>
               <h2 className="text-xl font-semibold text-stone-800 mb-2">No events found</h2>
               <p className="text-stone-600 mb-6">
-                You haven&apos;t been invited to any events yet, or you haven&apos;t created any events.
+                You haven&apos;t been invited to any events yet.
               </p>
               <button
-                onClick={() => router.push('/host/events/create')}
-                className="inline-flex items-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 transition-all duration-200"
+                onClick={handleCreateEvent}
+                className="inline-flex items-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 transition-colors"
               >
                 Create Your First Event
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
               {events.map((event) => {
                 const role = getRoleDisplay(event)
                 const rsvp = getRSVPDisplay(event.rsvp_status)
@@ -175,7 +180,7 @@ export default function SelectEventPage() {
                           <h3 className="text-lg font-semibold text-stone-800 group-hover:text-stone-900">
                             {event.title}
                           </h3>
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${role.color}`}>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${role.color}`}>
                             <span>{role.icon}</span>
                             {role.text}
                           </span>
@@ -194,11 +199,11 @@ export default function SelectEventPage() {
                             </div>
                           )}
                           
-                          {event.user_role === 'guest' && (
+                          {event.user_role === 'guest' && event.rsvp_status && (
                             <div className="flex items-center gap-2">
                               <span>✉️</span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${rsvp.color}`}>
-                                RSVP: {rsvp.text}
+                              <span className={`font-medium ${rsvp.color}`}>
+                                {rsvp.text}
                               </span>
                             </div>
                           )}
@@ -206,50 +211,27 @@ export default function SelectEventPage() {
                       </div>
                       
                       <div className="text-stone-400 group-hover:text-stone-600 transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        →
                       </div>
                     </div>
                   </button>
                 )
               })}
-            </div>
+              
+              {/* Create New Event Button */}
+              <button
+                onClick={handleCreateEvent}
+                className="w-full p-4 border-2 border-dashed border-stone-300 rounded-xl text-stone-600 hover:border-stone-400 hover:text-stone-700 transition-colors"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-lg">+</span>
+                  <span className="font-medium">Create New Event</span>
+                </div>
+              </button>
+            </>
           )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="max-w-2xl mx-auto mt-8 pt-6 border-t border-stone-200">
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => router.push('/host/events/create')}
-              className="inline-flex items-center justify-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-900 transition-all duration-200"
-            >
-              <span className="mr-2">+</span>
-              Create New Event
-            </button>
-            
-            <button
-              onClick={() => router.push('/profile')}
-              className="inline-flex items-center justify-center px-6 py-3 bg-white text-stone-700 font-medium rounded-lg border border-stone-200 hover:bg-stone-50 transition-all duration-200"
-            >
-              <span className="mr-2">👤</span>
-              View Profile
-            </button>
-            
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut()
-                router.push('/login')
-              }}
-              className="inline-flex items-center justify-center px-6 py-3 bg-white text-stone-700 font-medium rounded-lg border border-stone-200 hover:bg-stone-50 transition-all duration-200"
-            >
-              <span className="mr-2">🚪</span>
-              Sign Out
-            </button>
-          </div>
         </div>
       </div>
     </div>
   )
-}
+} 

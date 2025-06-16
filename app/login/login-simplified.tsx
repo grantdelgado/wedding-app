@@ -13,7 +13,7 @@ const DEV_PHONES = {
 
 const isDevelopment = process.env.NODE_ENV === 'development'
 
-export default function LoginPage() {
+export default function SimplifiedLoginPage() {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [step, setStep] = useState<'phone' | 'verify' | 'dev-select'>('phone')

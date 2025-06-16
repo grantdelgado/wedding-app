@@ -1,14 +1,8 @@
---
--- PostgreSQL database dump
---
 
--- Dumped from database version 15.8
--- Dumped by pg_dump version 17.5
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -17,717 +11,1620 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
---
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
---
 
-CREATE SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
 
 
---
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON SCHEMA public IS 'standard public schema';
 
 
---
--- Name: media_type_enum; Type: TYPE; Schema: public; Owner: -
---
 
-CREATE TYPE public.media_type_enum AS ENUM (
+
+COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE TYPE "public"."media_type_enum" AS ENUM (
     'image',
     'video'
 );
 
 
---
--- Name: message_type_enum; Type: TYPE; Schema: public; Owner: -
---
+ALTER TYPE "public"."media_type_enum" OWNER TO "postgres";
 
-CREATE TYPE public.message_type_enum AS ENUM (
+
+CREATE TYPE "public"."message_type_enum" AS ENUM (
     'direct',
     'announcement',
     'channel'
 );
 
 
---
--- Name: user_role_enum; Type: TYPE; Schema: public; Owner: -
---
+ALTER TYPE "public"."message_type_enum" OWNER TO "postgres";
 
-CREATE TYPE public.user_role_enum AS ENUM (
+
+CREATE TYPE "public"."rsvp_status_enum" AS ENUM (
+    'attending',
+    'declined',
+    'maybe',
+    'pending'
+);
+
+
+ALTER TYPE "public"."rsvp_status_enum" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."user_role_enum" AS ENUM (
     'guest',
     'host',
     'admin'
 );
 
 
---
--- Name: current_user_guest_has_tags(uuid, text[]); Type: FUNCTION; Schema: public; Owner: -
---
+ALTER TYPE "public"."user_role_enum" OWNER TO "postgres";
 
-CREATE FUNCTION public.current_user_guest_has_tags(p_event_id uuid, p_tags_to_check text[]) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
+
+CREATE OR REPLACE FUNCTION "public"."can_access_event"("p_event_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-  IF p_tags_to_check IS NULL OR array_length(p_tags_to_check, 1) IS NULL THEN
-    RETURN TRUE;
-  END IF;
   RETURN EXISTS (
-    SELECT 1 FROM public.event_guests
-    WHERE event_id = p_event_id
-      AND user_id = auth.uid()
-      AND guest_tags && p_tags_to_check
+    SELECT 1 FROM public.events_new e
+    LEFT JOIN public.event_participants ep ON ep.event_id = e.id
+    WHERE e.id = p_event_id 
+    AND (e.host_user_id = auth.uid() OR ep.user_id = auth.uid())
   );
 END;
 $$;
 
 
---
--- Name: handle_new_user(); Type: FUNCTION; Schema: public; Owner: -
---
+ALTER FUNCTION "public"."can_access_event"("p_event_id" "uuid") OWNER TO "postgres";
 
-CREATE FUNCTION public.handle_new_user() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
+
+CREATE OR REPLACE FUNCTION "public"."can_view_user_profile"("target_user_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-  INSERT INTO public.users (id, email)
-  VALUES (NEW.id, NEW.email);
-  RETURN NEW;
-END;
-$$;
-
-
---
--- Name: handle_user_update(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.handle_user_update() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  UPDATE public.users
-  SET email = NEW.email
-  WHERE id = NEW.id;
-  RETURN NEW;
-END;
-$$;
-
-
---
--- Name: is_event_guest(uuid); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.is_event_guest(p_event_id uuid) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.event_guests
-    WHERE event_id = p_event_id AND user_id = auth.uid()
+  RETURN (
+    -- Users can view their own profile
+    target_user_id = auth.uid()
+    OR
+    -- Event guests can view host profiles
+    EXISTS (
+      SELECT 1 FROM public.events
+      WHERE host_user_id = target_user_id 
+      AND (public.is_event_guest(events.id) OR public.is_event_host(events.id))
+    )
+    OR
+    -- Event hosts can view guest profiles
+    EXISTS (
+      SELECT 1 FROM public.event_guests eg
+      JOIN public.events e ON eg.event_id = e.id
+      WHERE eg.user_id = target_user_id 
+      AND public.is_event_host(e.id)
+    )
   );
 END;
 $$;
 
 
---
--- Name: is_event_host(uuid); Type: FUNCTION; Schema: public; Owner: -
---
+ALTER FUNCTION "public"."can_view_user_profile"("target_user_id" "uuid") OWNER TO "postgres";
 
-CREATE FUNCTION public.is_event_host(p_event_id uuid) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
+
+CREATE OR REPLACE FUNCTION "public"."get_ready_scheduled_messages"() RETURNS TABLE("id" "uuid", "event_id" "uuid", "content" "text", "target_guest_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.events
+  RETURN QUERY
+  SELECT 
+    sm.id,
+    sm.event_id,
+    sm.content,
+    CASE 
+      WHEN sm.target_all_guests THEN (
+        SELECT COUNT(*) FROM public.event_guests eg WHERE eg.event_id = sm.event_id
+      )
+      ELSE (
+        SELECT COUNT(DISTINCT eg.id) 
+        FROM public.event_guests eg
+        LEFT JOIN public.guest_sub_event_assignments gsea ON eg.id = gsea.guest_id
+        LEFT JOIN public.sub_events se ON gsea.sub_event_id = se.id
+        WHERE eg.event_id = sm.event_id
+        AND (
+          sm.target_guest_ids IS NULL OR eg.id = ANY(sm.target_guest_ids) OR
+          sm.target_guest_tags IS NULL OR sm.target_guest_tags && eg.guest_tags OR
+          sm.target_sub_event_ids IS NULL OR se.id = ANY(sm.target_sub_event_ids)
+        )
+      )
+    END as target_guest_count
+  FROM public.scheduled_messages sm
+  WHERE sm.status = 'scheduled'
+  AND sm.send_at <= NOW();
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_ready_scheduled_messages"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_sub_event_guests"("p_sub_event_id" "uuid") RETURNS TABLE("guest_id" "uuid", "guest_name" "text", "guest_email" "text", "phone_number" "text", "rsvp_status" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    eg.id,
+    eg.guest_name,
+    eg.guest_email,
+    eg.phone,
+    gsea.rsvp_status
+  FROM public.event_guests eg
+  INNER JOIN public.guest_sub_event_assignments gsea ON eg.id = gsea.guest_id
+  WHERE gsea.sub_event_id = p_sub_event_id
+  AND gsea.is_invited = true;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_sub_event_guests"("p_sub_event_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Check if user is the primary host
+  IF EXISTS (
+    SELECT 1 FROM public.events 
     WHERE id = p_event_id AND host_user_id = auth.uid()
+  ) THEN
+    RETURN 'host';
+  END IF;
+  
+  -- Check role from event_guests table
+  RETURN (
+    SELECT eg.role FROM public.event_guests eg
+    WHERE eg.event_id = p_event_id AND eg.user_id = auth.uid()
   );
 END;
 $$;
 
 
---
--- Name: is_going_guest(uuid); Type: FUNCTION; Schema: public; Owner: -
---
+ALTER FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") OWNER TO "postgres";
 
-CREATE FUNCTION public.is_going_guest(eid uuid) RETURNS boolean
-    LANGUAGE sql STABLE
+
+COMMENT ON FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") IS 'Returns the user''s role for a specific event';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."get_user_events"() RETURNS TABLE("event_id" "uuid", "title" "text", "event_date" "date", "location" "text", "user_role" "text", "rsvp_status" "text", "is_primary_host" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM event_guests
-    WHERE event_id = eid
-      AND user_id = auth.uid()
-      AND rsvp_status = 'going'
-  );
+BEGIN
+  RETURN QUERY
+  SELECT 
+    e.id,
+    e.title,
+    e.event_date,
+    e.location,
+    CASE 
+      WHEN e.host_user_id = auth.uid() THEN 'host'::TEXT
+      ELSE COALESCE(ep.role, 'guest'::TEXT)
+    END,
+    ep.rsvp_status,
+    (e.host_user_id = auth.uid())
+  FROM public.events_new e
+  LEFT JOIN public.event_participants ep ON ep.event_id = e.id AND ep.user_id = auth.uid()
+  WHERE e.host_user_id = auth.uid() OR ep.user_id = auth.uid()
+  ORDER BY e.event_date DESC;
+END;
 $$;
 
 
---
--- Name: is_user_guest_of_event(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
---
+ALTER FUNCTION "public"."get_user_events"() OWNER TO "postgres";
 
-CREATE FUNCTION public.is_user_guest_of_event(p_event_id uuid, p_user_id uuid) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+
+CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  INSERT INTO public.users_new (id, phone, email, full_name)
+  VALUES (
+    NEW.id, 
+    COALESCE(NEW.phone, NEW.raw_user_meta_data->>'phone', '+1555000000' || (floor(random() * 9) + 1)::text),
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name')
+  );
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_development_phone"("p_phone" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $_$
+BEGIN
+  RETURN p_phone ~ '^\+1555000000[1-9]$';
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."is_development_phone"("p_phone" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_event_host"("p_event_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 FROM public.event_guests eg
-    WHERE eg.event_id = p_event_id AND eg.user_id = p_user_id
+    SELECT 1 FROM public.events_new e
+    LEFT JOIN public.event_participants ep ON ep.event_id = e.id AND ep.user_id = auth.uid()
+    WHERE e.id = p_event_id 
+    AND (e.host_user_id = auth.uid() OR ep.role = 'host')
   );
 END;
 $$;
 
+
+ALTER FUNCTION "public"."is_event_host"("p_event_id" "uuid") OWNER TO "postgres";
 
 SET default_tablespace = '';
 
-SET default_table_access_method = heap;
+SET default_table_access_method = "heap";
 
---
--- Name: event_guests; Type: TABLE; Schema: public; Owner: -
---
 
-CREATE TABLE public.event_guests (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    event_id uuid NOT NULL,
-    user_id uuid,
-    rsvp_status text,
-    guest_tags text[],
-    phone text,
-    notes text,
-    guest_name text,
-    guest_email text,
-    CONSTRAINT event_guests_rsvp_status_check CHECK ((rsvp_status = ANY (ARRAY['Attending'::text, 'Declined'::text, 'Maybe'::text, 'Pending'::text])))
+CREATE TABLE IF NOT EXISTS "public"."communication_preferences" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "receive_sms" boolean DEFAULT true,
+    "receive_push" boolean DEFAULT true,
+    "receive_email" boolean DEFAULT false,
+    "quiet_hours_start" time without time zone,
+    "quiet_hours_end" time without time zone,
+    "timezone" character varying(50) DEFAULT 'America/Los_Angeles'::character varying,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
---
--- Name: TABLE event_guests; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.event_guests IS 'Guest metadata and RSVP details.';
+ALTER TABLE "public"."communication_preferences" OWNER TO "postgres";
 
 
---
--- Name: events; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.events (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    host_user_id uuid NOT NULL,
-    title text NOT NULL,
-    event_date date NOT NULL,
-    location text,
-    header_image_url text,
-    description text,
-    is_public boolean DEFAULT true
+CREATE TABLE IF NOT EXISTS "public"."event_guests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "user_id" "uuid",
+    "guest_name" "text",
+    "guest_email" "text",
+    "phone" "text" NOT NULL,
+    "rsvp_status" "text" DEFAULT 'pending'::"text",
+    "notes" "text",
+    "guest_tags" "text"[] DEFAULT '{}'::"text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "role" "text" DEFAULT 'guest'::"text" NOT NULL,
+    "invited_at" timestamp with time zone DEFAULT "now"(),
+    "phone_number_verified" boolean DEFAULT false,
+    "sms_opt_out" boolean DEFAULT false,
+    "preferred_communication" character varying(20) DEFAULT 'sms'::character varying,
+    CONSTRAINT "event_guests_preferred_communication_check" CHECK ((("preferred_communication")::"text" = ANY ((ARRAY['sms'::character varying, 'push'::character varying, 'email'::character varying, 'none'::character varying])::"text"[]))),
+    CONSTRAINT "event_guests_role_check" CHECK (("role" = ANY (ARRAY['host'::"text", 'guest'::"text", 'admin'::"text"]))),
+    CONSTRAINT "event_guests_rsvp_status_check" CHECK (("rsvp_status" = ANY (ARRAY['attending'::"text", 'declined'::"text", 'maybe'::"text", 'pending'::"text"]))),
+    CONSTRAINT "phone_format" CHECK (("phone" ~ '^\+[1-9]\d{1,14}$'::"text"))
 );
 
 
---
--- Name: TABLE events; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.events IS 'Wedding or event metadata.';
+ALTER TABLE "public"."event_guests" OWNER TO "postgres";
 
 
---
--- Name: media; Type: TABLE; Schema: public; Owner: -
---
+COMMENT ON COLUMN "public"."event_guests"."role" IS 'Per-event role assignment: host, guest, or admin';
 
-CREATE TABLE public.media (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    event_id uuid NOT NULL,
-    uploader_user_id uuid,
-    media_type text NOT NULL,
-    storage_path text NOT NULL,
-    caption text,
-    is_featured boolean DEFAULT false,
-    media_tags text[],
-    CONSTRAINT media_media_type_check CHECK ((media_type = ANY (ARRAY['image'::text, 'video'::text, 'audio'::text])))
+
+
+CREATE TABLE IF NOT EXISTS "public"."event_participants" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "role" "text" DEFAULT 'guest'::"text" NOT NULL,
+    "rsvp_status" "text" DEFAULT 'pending'::"text",
+    "notes" "text",
+    "invited_at" timestamp with time zone DEFAULT "now"(),
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "event_participants_role_check" CHECK (("role" = ANY (ARRAY['host'::"text", 'guest'::"text"]))),
+    CONSTRAINT "event_participants_rsvp_status_check" CHECK (("rsvp_status" = ANY (ARRAY['attending'::"text", 'declined'::"text", 'maybe'::"text", 'pending'::"text"])))
 );
 
 
---
--- Name: TABLE media; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.media IS 'Media uploads for events.';
+ALTER TABLE "public"."event_participants" OWNER TO "postgres";
 
 
---
--- Name: messages; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.messages (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    event_id uuid NOT NULL,
-    sender_user_id uuid,
-    recipient_user_id uuid,
-    recipient_tags text[],
-    content text NOT NULL,
-    message_type text DEFAULT 'direct'::text NOT NULL,
-    parent_message_id uuid,
-    CONSTRAINT messages_message_type_check CHECK ((message_type = ANY (ARRAY['direct'::text, 'broadcast'::text, 'reply'::text])))
+CREATE TABLE IF NOT EXISTS "public"."events" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "host_user_id" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "event_date" "date" NOT NULL,
+    "location" "text",
+    "description" "text",
+    "header_image_url" "text",
+    "is_public" boolean DEFAULT false,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
---
--- Name: TABLE messages; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.messages IS 'Messages sent within events.';
+ALTER TABLE "public"."events" OWNER TO "postgres";
 
 
---
--- Name: users; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.users (
-    id uuid DEFAULT auth.uid() NOT NULL,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    full_name text,
-    email text NOT NULL,
-    avatar_url text,
-    role text DEFAULT 'guest'::text,
-    CONSTRAINT email_format CHECK ((email ~* '^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]+$'::text))
+CREATE TABLE IF NOT EXISTS "public"."events_new" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "event_date" "date" NOT NULL,
+    "location" "text",
+    "description" "text",
+    "host_user_id" "uuid" NOT NULL,
+    "header_image_url" "text",
+    "is_public" boolean DEFAULT false,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
---
--- Name: TABLE users; Type: COMMENT; Schema: public; Owner: -
---
+ALTER TABLE "public"."events_new" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."guest_sub_event_assignments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "guest_id" "uuid" NOT NULL,
+    "sub_event_id" "uuid" NOT NULL,
+    "is_invited" boolean DEFAULT true,
+    "rsvp_status" character varying(20) DEFAULT 'pending'::character varying,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "guest_sub_event_assignments_rsvp_status_check" CHECK ((("rsvp_status")::"text" = ANY ((ARRAY['attending'::character varying, 'declined'::character varying, 'maybe'::character varying, 'pending'::character varying])::"text"[])))
+);
+
+
+ALTER TABLE "public"."guest_sub_event_assignments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."media" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "uploader_user_id" "uuid",
+    "storage_path" "text" NOT NULL,
+    "media_type" "text" NOT NULL,
+    "caption" "text",
+    "is_featured" boolean DEFAULT false,
+    "media_tags" "text"[] DEFAULT '{}'::"text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "media_media_type_check" CHECK (("media_type" = ANY (ARRAY['image'::"text", 'video'::"text"])))
+);
+
+
+ALTER TABLE "public"."media" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."media_new" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "uploader_user_id" "uuid",
+    "storage_path" "text" NOT NULL,
+    "media_type" "text" NOT NULL,
+    "caption" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "media_new_media_type_check" CHECK (("media_type" = ANY (ARRAY['image'::"text", 'video'::"text"])))
+);
+
+
+ALTER TABLE "public"."media_new" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."message_deliveries" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "scheduled_message_id" "uuid",
+    "message_id" "uuid",
+    "guest_id" "uuid" NOT NULL,
+    "phone_number" character varying(20),
+    "email" character varying(255),
+    "user_id" "uuid",
+    "sms_status" character varying(20) DEFAULT 'pending'::character varying,
+    "push_status" character varying(20) DEFAULT 'pending'::character varying,
+    "email_status" character varying(20) DEFAULT 'pending'::character varying,
+    "sms_provider_id" character varying(255),
+    "push_provider_id" character varying(255),
+    "email_provider_id" character varying(255),
+    "has_responded" boolean DEFAULT false,
+    "response_message_id" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "message_deliveries_email_status_check" CHECK ((("email_status")::"text" = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'delivered'::character varying, 'failed'::character varying, 'not_applicable'::character varying])::"text"[]))),
+    CONSTRAINT "message_deliveries_push_status_check" CHECK ((("push_status")::"text" = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'delivered'::character varying, 'failed'::character varying, 'not_applicable'::character varying])::"text"[]))),
+    CONSTRAINT "message_deliveries_sms_status_check" CHECK ((("sms_status")::"text" = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'delivered'::character varying, 'failed'::character varying, 'undelivered'::character varying])::"text"[])))
+);
+
+
+ALTER TABLE "public"."message_deliveries" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."messages" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "sender_user_id" "uuid",
+    "recipient_user_id" "uuid",
+    "content" "text" NOT NULL,
+    "message_type" "text" DEFAULT 'direct'::"text",
+    "parent_message_id" "uuid",
+    "recipient_tags" "text"[] DEFAULT '{}'::"text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "messages_message_type_check" CHECK (("message_type" = ANY (ARRAY['direct'::"text", 'announcement'::"text", 'channel'::"text"])))
+);
+
+
+ALTER TABLE "public"."messages" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."messages_new" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "sender_user_id" "uuid",
+    "content" "text" NOT NULL,
+    "message_type" "text" DEFAULT 'direct'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "messages_new_message_type_check" CHECK (("message_type" = ANY (ARRAY['direct'::"text", 'announcement'::"text"])))
+);
 
-COMMENT ON TABLE public.users IS 'Public user profiles extending Supabase auth.users.';
 
+ALTER TABLE "public"."messages_new" OWNER TO "postgres";
 
---
--- Name: COLUMN users.id; Type: COMMENT; Schema: public; Owner: -
---
 
-COMMENT ON COLUMN public.users.id IS 'UUID that matches auth.users.id';
+CREATE TABLE IF NOT EXISTS "public"."users_new" (
+    "id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "phone" "text" NOT NULL,
+    "full_name" "text",
+    "avatar_url" "text",
+    "email" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "users_new_phone_format" CHECK (("phone" ~ '^\+[1-9]\d{1,14}$'::"text"))
+);
 
 
---
--- Name: public_user_profiles; Type: VIEW; Schema: public; Owner: -
---
+ALTER TABLE "public"."users_new" OWNER TO "postgres";
 
-CREATE VIEW public.public_user_profiles AS
- SELECT users.id,
-    users.full_name,
-    users.avatar_url
-   FROM public.users;
 
+CREATE OR REPLACE VIEW "public"."public_user_profiles" AS
+ SELECT "u"."id",
+    "u"."full_name",
+    "u"."avatar_url"
+   FROM "public"."users_new" "u"
+  WHERE ((EXISTS ( SELECT 1
+           FROM (("public"."events_new" "e"
+             LEFT JOIN "public"."event_participants" "ep1" ON ((("ep1"."event_id" = "e"."id") AND ("ep1"."user_id" = "auth"."uid"()))))
+             LEFT JOIN "public"."event_participants" "ep2" ON ((("ep2"."event_id" = "e"."id") AND ("ep2"."user_id" = "u"."id"))))
+          WHERE ((("e"."host_user_id" = "auth"."uid"()) OR ("ep1"."user_id" = "auth"."uid"())) AND (("e"."host_user_id" = "u"."id") OR ("ep2"."user_id" = "u"."id"))))) OR ("u"."id" = "auth"."uid"()));
 
---
--- Name: event_guests event_guests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.event_guests
-    ADD CONSTRAINT event_guests_pkey PRIMARY KEY (id);
+ALTER TABLE "public"."public_user_profiles" OWNER TO "postgres";
 
 
---
--- Name: events events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
+CREATE TABLE IF NOT EXISTS "public"."scheduled_messages" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "sender_user_id" "uuid" NOT NULL,
+    "subject" character varying(500),
+    "content" "text" NOT NULL,
+    "send_at" timestamp with time zone NOT NULL,
+    "target_all_guests" boolean DEFAULT false,
+    "target_sub_event_ids" "uuid"[],
+    "target_guest_tags" "text"[],
+    "target_guest_ids" "uuid"[],
+    "send_via_sms" boolean DEFAULT true,
+    "send_via_push" boolean DEFAULT true,
+    "send_via_email" boolean DEFAULT false,
+    "status" character varying(20) DEFAULT 'scheduled'::character varying,
+    "sent_at" timestamp with time zone,
+    "recipient_count" integer DEFAULT 0,
+    "success_count" integer DEFAULT 0,
+    "failure_count" integer DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "scheduled_messages_status_check" CHECK ((("status")::"text" = ANY ((ARRAY['scheduled'::character varying, 'sending'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::"text"[])))
+);
 
-ALTER TABLE ONLY public.events
-    ADD CONSTRAINT events_pkey PRIMARY KEY (id);
 
+ALTER TABLE "public"."scheduled_messages" OWNER TO "postgres";
 
---
--- Name: media media_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.media
-    ADD CONSTRAINT media_pkey PRIMARY KEY (id);
+CREATE TABLE IF NOT EXISTS "public"."sub_events" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "name" character varying(255) NOT NULL,
+    "description" "text",
+    "event_date" timestamp with time zone,
+    "location" "text",
+    "is_required" boolean DEFAULT false,
+    "sort_order" integer DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
 
 
---
--- Name: messages messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE "public"."sub_events" OWNER TO "postgres";
 
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
 
+CREATE TABLE IF NOT EXISTS "public"."users" (
+    "id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "email" "text",
+    "full_name" "text",
+    "avatar_url" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "phone" "text" NOT NULL,
+    CONSTRAINT "users_phone_format" CHECK ((("phone" IS NULL) OR ("phone" ~ '^\+[1-9]\d{1,14}$'::"text")))
+);
 
---
--- Name: users unique_user_email; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT unique_user_email UNIQUE (email);
+ALTER TABLE "public"."users" OWNER TO "postgres";
 
 
---
--- Name: event_guests uq_event_user; Type: CONSTRAINT; Schema: public; Owner: -
---
+COMMENT ON COLUMN "public"."users"."email" IS 'Optional email for notifications only';
 
-ALTER TABLE ONLY public.event_guests
-    ADD CONSTRAINT uq_event_user UNIQUE (event_id, user_id);
 
 
---
--- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
---
+COMMENT ON COLUMN "public"."users"."phone" IS 'Primary identity field - international format phone number';
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_email_key UNIQUE (email);
 
 
---
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."communication_preferences"
+    ADD CONSTRAINT "communication_preferences_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 
---
--- Name: event_guests handle_updated_at_event_guests; Type: TRIGGER; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."communication_preferences"
+    ADD CONSTRAINT "communication_preferences_user_id_event_id_key" UNIQUE ("user_id", "event_id");
 
-CREATE TRIGGER handle_updated_at_event_guests BEFORE UPDATE ON public.event_guests FOR EACH ROW EXECUTE FUNCTION public.moddatetime('updated_at');
 
 
---
--- Name: events handle_updated_at_events; Type: TRIGGER; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."event_guests"
+    ADD CONSTRAINT "event_guests_event_id_phone_key" UNIQUE ("event_id", "phone");
 
-CREATE TRIGGER handle_updated_at_events BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION public.moddatetime('updated_at');
 
 
---
--- Name: media handle_updated_at_media; Type: TRIGGER; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."event_guests"
+    ADD CONSTRAINT "event_guests_pkey" PRIMARY KEY ("id");
 
-CREATE TRIGGER handle_updated_at_media BEFORE UPDATE ON public.media FOR EACH ROW EXECUTE FUNCTION public.moddatetime('updated_at');
 
 
---
--- Name: messages handle_updated_at_messages; Type: TRIGGER; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."event_participants"
+    ADD CONSTRAINT "event_participants_event_id_user_id_key" UNIQUE ("event_id", "user_id");
 
-CREATE TRIGGER handle_updated_at_messages BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.moddatetime('updated_at');
 
 
---
--- Name: users handle_updated_at_users; Type: TRIGGER; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."event_participants"
+    ADD CONSTRAINT "event_participants_pkey" PRIMARY KEY ("id");
 
-CREATE TRIGGER handle_updated_at_users BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.moddatetime('updated_at');
 
 
---
--- Name: event_guests event_guests_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."events_new"
+    ADD CONSTRAINT "events_new_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.event_guests
-    ADD CONSTRAINT event_guests_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
 
 
---
--- Name: event_guests event_guests_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."events"
+    ADD CONSTRAINT "events_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.event_guests
-    ADD CONSTRAINT event_guests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
---
--- Name: events events_host_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."guest_sub_event_assignments"
+    ADD CONSTRAINT "guest_sub_event_assignments_guest_id_sub_event_id_key" UNIQUE ("guest_id", "sub_event_id");
 
-ALTER TABLE ONLY public.events
-    ADD CONSTRAINT events_host_user_id_fkey FOREIGN KEY (host_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
---
--- Name: media media_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."guest_sub_event_assignments"
+    ADD CONSTRAINT "guest_sub_event_assignments_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.media
-    ADD CONSTRAINT media_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
 
 
---
--- Name: media media_uploader_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."media_new"
+    ADD CONSTRAINT "media_new_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.media
-    ADD CONSTRAINT media_uploader_user_id_fkey FOREIGN KEY (uploader_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
---
--- Name: messages messages_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."media"
+    ADD CONSTRAINT "media_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE;
 
 
---
--- Name: messages messages_parent_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_parent_message_id_fkey FOREIGN KEY (parent_message_id) REFERENCES public.messages(id) ON DELETE CASCADE;
 
 
---
--- Name: messages messages_recipient_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."messages_new"
+    ADD CONSTRAINT "messages_new_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_recipient_user_id_fkey FOREIGN KEY (recipient_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
---
--- Name: messages messages_sender_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_sender_user_id_fkey FOREIGN KEY (sender_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
---
--- Name: users users_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."scheduled_messages"
+    ADD CONSTRAINT "scheduled_messages_pkey" PRIMARY KEY ("id");
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id);
 
 
---
--- Name: events Authenticated users can create events; Type: POLICY; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."sub_events"
+    ADD CONSTRAINT "sub_events_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Authenticated users can create events" ON public.events FOR INSERT TO authenticated WITH CHECK ((host_user_id = auth.uid()));
 
 
---
--- Name: event_guests Event hosts can add guests to their events; Type: POLICY; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "unique_user_phone" UNIQUE ("phone");
 
-CREATE POLICY "Event hosts can add guests to their events" ON public.event_guests FOR INSERT TO authenticated WITH CHECK (public.is_event_host(event_id));
 
 
---
--- Name: media Event hosts can delete media in their events; Type: POLICY; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."users_new"
+    ADD CONSTRAINT "users_new_phone_key" UNIQUE ("phone");
 
-CREATE POLICY "Event hosts can delete media in their events" ON public.media FOR DELETE TO authenticated USING (public.is_event_host(event_id));
 
 
---
--- Name: messages Event hosts can delete messages in their events; Type: POLICY; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."users_new"
+    ADD CONSTRAINT "users_new_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Event hosts can delete messages in their events" ON public.messages FOR DELETE TO authenticated USING (public.is_event_host(event_id));
 
 
---
--- Name: events Event hosts can delete their own events; Type: POLICY; Schema: public; Owner: -
---
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
 
-CREATE POLICY "Event hosts can delete their own events" ON public.events FOR DELETE TO authenticated USING ((host_user_id = auth.uid()));
 
 
---
--- Name: event_guests Event hosts can remove guests from their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_communication_preferences_user_event" ON "public"."communication_preferences" USING "btree" ("user_id", "event_id");
 
-CREATE POLICY "Event hosts can remove guests from their events" ON public.event_guests FOR DELETE TO authenticated USING (public.is_event_host(event_id));
 
 
---
--- Name: event_guests Event hosts can update guest entries for their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_event_id" ON "public"."event_guests" USING "btree" ("event_id");
 
-CREATE POLICY "Event hosts can update guest entries for their events" ON public.event_guests FOR UPDATE TO authenticated USING (public.is_event_host(event_id)) WITH CHECK (public.is_event_host(event_id));
 
 
---
--- Name: media Event hosts can update media in their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_event_role" ON "public"."event_guests" USING "btree" ("event_id", "role");
 
-CREATE POLICY "Event hosts can update media in their events" ON public.media FOR UPDATE TO authenticated USING (public.is_event_host(event_id)) WITH CHECK (public.is_event_host(event_id));
 
 
---
--- Name: events Event hosts can update their own events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_phone" ON "public"."event_guests" USING "btree" ("phone");
 
-CREATE POLICY "Event hosts can update their own events" ON public.events FOR UPDATE TO authenticated USING ((host_user_id = auth.uid())) WITH CHECK ((host_user_id = auth.uid()));
 
 
---
--- Name: media Event hosts can upload media to their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_role" ON "public"."event_guests" USING "btree" ("role");
 
-CREATE POLICY "Event hosts can upload media to their events" ON public.media FOR INSERT TO authenticated WITH CHECK ((((uploader_user_id = auth.uid()) OR (uploader_user_id IS NULL)) AND public.is_event_host(event_id)));
 
 
---
--- Name: messages Event hosts can view all messages in their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_rsvp_status" ON "public"."event_guests" USING "btree" ("rsvp_status");
 
-CREATE POLICY "Event hosts can view all messages in their events" ON public.messages FOR SELECT TO authenticated USING (public.is_event_host(event_id));
 
 
---
--- Name: event_guests Event hosts can view guests for their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_user_id" ON "public"."event_guests" USING "btree" ("user_id");
 
-CREATE POLICY "Event hosts can view guests for their events" ON public.event_guests FOR SELECT TO authenticated USING (public.is_event_host(event_id));
 
 
---
--- Name: media Event participants can view event media; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_guests_user_role" ON "public"."event_guests" USING "btree" ("user_id", "role");
 
-CREATE POLICY "Event participants can view event media" ON public.media FOR SELECT TO authenticated USING ((public.is_event_guest(event_id) OR public.is_event_host(event_id)));
 
 
---
--- Name: event_guests Guests can add themselves to an event; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_participants_event" ON "public"."event_participants" USING "btree" ("event_id");
 
-CREATE POLICY "Guests can add themselves to an event" ON public.event_guests FOR INSERT TO authenticated WITH CHECK ((user_id = auth.uid()));
 
 
---
--- Name: event_guests Guests can delete their own guest entry; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_participants_role" ON "public"."event_participants" USING "btree" ("role");
 
-CREATE POLICY "Guests can delete their own guest entry" ON public.event_guests FOR DELETE TO authenticated USING ((user_id = auth.uid()));
 
 
---
--- Name: messages Guests can send messages in their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_event_participants_user" ON "public"."event_participants" USING "btree" ("user_id");
 
-CREATE POLICY "Guests can send messages in their events" ON public.messages FOR INSERT TO authenticated WITH CHECK (((sender_user_id = auth.uid()) AND (public.is_event_guest(event_id) OR public.is_event_host(event_id))));
 
 
---
--- Name: event_guests Guests can update their own guest entry; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_events_event_date" ON "public"."events" USING "btree" ("event_date");
 
-CREATE POLICY "Guests can update their own guest entry" ON public.event_guests FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
 
 
---
--- Name: media Guests can upload media to their events; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_events_host_user_id" ON "public"."events" USING "btree" ("host_user_id");
 
-CREATE POLICY "Guests can upload media to their events" ON public.media FOR INSERT TO authenticated WITH CHECK (((uploader_user_id = auth.uid()) AND public.is_event_guest(event_id)));
 
 
---
--- Name: event_guests Guests can view their own guest entry; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_events_is_public" ON "public"."events" USING "btree" ("is_public");
 
-CREATE POLICY "Guests can view their own guest entry" ON public.event_guests FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
 
---
--- Name: messages Senders can delete their own messages; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_events_new_date" ON "public"."events_new" USING "btree" ("event_date");
 
-CREATE POLICY "Senders can delete their own messages" ON public.messages FOR DELETE TO authenticated USING ((sender_user_id = auth.uid()));
 
 
---
--- Name: media Uploaders can delete their own media; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_events_new_host" ON "public"."events_new" USING "btree" ("host_user_id");
 
-CREATE POLICY "Uploaders can delete their own media" ON public.media FOR DELETE TO authenticated USING ((uploader_user_id = auth.uid()));
 
 
---
--- Name: media Uploaders can update their own media; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_guest_sub_event_assignments_guest_id" ON "public"."guest_sub_event_assignments" USING "btree" ("guest_id");
 
-CREATE POLICY "Uploaders can update their own media" ON public.media FOR UPDATE TO authenticated USING ((uploader_user_id = auth.uid())) WITH CHECK ((uploader_user_id = auth.uid()));
 
 
---
--- Name: users Users can delete their own profile; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_guest_sub_event_assignments_sub_event_id" ON "public"."guest_sub_event_assignments" USING "btree" ("sub_event_id");
 
-CREATE POLICY "Users can delete their own profile" ON public.users FOR DELETE TO authenticated USING ((id = auth.uid()));
 
 
---
--- Name: users Users can update their own profile; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_media_event_id" ON "public"."media" USING "btree" ("event_id");
 
-CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE TO authenticated USING ((id = auth.uid())) WITH CHECK ((id = auth.uid()));
 
 
---
--- Name: events Users can view events they are invited to or public ones; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_media_media_type" ON "public"."media" USING "btree" ("media_type");
 
-CREATE POLICY "Users can view events they are invited to or public ones" ON public.events FOR SELECT TO authenticated USING (((is_public = true) OR public.is_event_guest(id) OR public.is_event_host(id)));
 
 
---
--- Name: messages Users can view relevant messages; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_media_new_event" ON "public"."media_new" USING "btree" ("event_id");
 
-CREATE POLICY "Users can view relevant messages" ON public.messages FOR SELECT TO authenticated USING (((sender_user_id = auth.uid()) OR (recipient_user_id = auth.uid()) OR (public.is_event_guest(event_id) AND (((recipient_user_id IS NULL) AND (recipient_tags IS NULL)) OR ((recipient_user_id IS NULL) AND (recipient_tags IS NOT NULL) AND public.current_user_guest_has_tags(event_id, recipient_tags))))));
 
 
---
--- Name: users Users can view their own profile; Type: POLICY; Schema: public; Owner: -
---
+CREATE INDEX "idx_media_uploader_user_id" ON "public"."media" USING "btree" ("uploader_user_id");
 
-CREATE POLICY "Users can view their own profile" ON public.users FOR SELECT TO authenticated USING ((id = auth.uid()));
 
 
---
--- Name: event_guests; Type: ROW SECURITY; Schema: public; Owner: -
---
+CREATE INDEX "idx_message_deliveries_guest_id" ON "public"."message_deliveries" USING "btree" ("guest_id");
 
-ALTER TABLE public.event_guests ENABLE ROW LEVEL SECURITY;
 
---
--- Name: events; Type: ROW SECURITY; Schema: public; Owner: -
---
 
-ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+CREATE INDEX "idx_message_deliveries_scheduled_message_id" ON "public"."message_deliveries" USING "btree" ("scheduled_message_id");
 
---
--- Name: media; Type: ROW SECURITY; Schema: public; Owner: -
---
 
-ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 
---
--- Name: messages; Type: ROW SECURITY; Schema: public; Owner: -
---
+CREATE INDEX "idx_messages_created_at" ON "public"."messages" USING "btree" ("created_at");
 
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
---
--- Name: users; Type: ROW SECURITY; Schema: public; Owner: -
---
 
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE INDEX "idx_messages_event_id" ON "public"."messages" USING "btree" ("event_id");
 
---
--- PostgreSQL database dump complete
---
 
+
+CREATE INDEX "idx_messages_new_event" ON "public"."messages_new" USING "btree" ("event_id");
+
+
+
+CREATE INDEX "idx_messages_recipient_user_id" ON "public"."messages" USING "btree" ("recipient_user_id");
+
+
+
+CREATE INDEX "idx_messages_sender_user_id" ON "public"."messages" USING "btree" ("sender_user_id");
+
+
+
+CREATE INDEX "idx_scheduled_messages_event_id" ON "public"."scheduled_messages" USING "btree" ("event_id");
+
+
+
+CREATE INDEX "idx_scheduled_messages_send_at" ON "public"."scheduled_messages" USING "btree" ("send_at");
+
+
+
+CREATE INDEX "idx_scheduled_messages_status" ON "public"."scheduled_messages" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_sub_events_event_id" ON "public"."sub_events" USING "btree" ("event_id");
+
+
+
+CREATE INDEX "idx_users_email" ON "public"."users" USING "btree" ("email");
+
+
+
+CREATE INDEX "idx_users_new_phone" ON "public"."users_new" USING "btree" ("phone");
+
+
+
+CREATE INDEX "idx_users_phone" ON "public"."users" USING "btree" ("phone");
+
+
+
+CREATE OR REPLACE TRIGGER "event_guests_updated_at" BEFORE UPDATE ON "public"."event_guests" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "events_updated_at" BEFORE UPDATE ON "public"."events" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "media_updated_at" BEFORE UPDATE ON "public"."media" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "messages_updated_at" BEFORE UPDATE ON "public"."messages" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "users_updated_at" BEFORE UPDATE ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+ALTER TABLE ONLY "public"."communication_preferences"
+    ADD CONSTRAINT "communication_preferences_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."communication_preferences"
+    ADD CONSTRAINT "communication_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."event_guests"
+    ADD CONSTRAINT "event_guests_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."event_guests"
+    ADD CONSTRAINT "event_guests_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."event_participants"
+    ADD CONSTRAINT "event_participants_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events_new"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."event_participants"
+    ADD CONSTRAINT "event_participants_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users_new"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."events"
+    ADD CONSTRAINT "events_host_user_id_fkey" FOREIGN KEY ("host_user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."events_new"
+    ADD CONSTRAINT "events_new_host_user_id_fkey" FOREIGN KEY ("host_user_id") REFERENCES "public"."users_new"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."guest_sub_event_assignments"
+    ADD CONSTRAINT "guest_sub_event_assignments_guest_id_fkey" FOREIGN KEY ("guest_id") REFERENCES "public"."event_guests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."guest_sub_event_assignments"
+    ADD CONSTRAINT "guest_sub_event_assignments_sub_event_id_fkey" FOREIGN KEY ("sub_event_id") REFERENCES "public"."sub_events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."media"
+    ADD CONSTRAINT "media_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."media_new"
+    ADD CONSTRAINT "media_new_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events_new"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."media_new"
+    ADD CONSTRAINT "media_new_uploader_user_id_fkey" FOREIGN KEY ("uploader_user_id") REFERENCES "public"."users_new"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."media"
+    ADD CONSTRAINT "media_uploader_user_id_fkey" FOREIGN KEY ("uploader_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_guest_id_fkey" FOREIGN KEY ("guest_id") REFERENCES "public"."event_guests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_response_message_id_fkey" FOREIGN KEY ("response_message_id") REFERENCES "public"."messages"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_scheduled_message_id_fkey" FOREIGN KEY ("scheduled_message_id") REFERENCES "public"."scheduled_messages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."message_deliveries"
+    ADD CONSTRAINT "message_deliveries_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."messages_new"
+    ADD CONSTRAINT "messages_new_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events_new"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."messages_new"
+    ADD CONSTRAINT "messages_new_sender_user_id_fkey" FOREIGN KEY ("sender_user_id") REFERENCES "public"."users_new"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_parent_message_id_fkey" FOREIGN KEY ("parent_message_id") REFERENCES "public"."messages"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_recipient_user_id_fkey" FOREIGN KEY ("recipient_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."messages"
+    ADD CONSTRAINT "messages_sender_user_id_fkey" FOREIGN KEY ("sender_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."scheduled_messages"
+    ADD CONSTRAINT "scheduled_messages_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."scheduled_messages"
+    ADD CONSTRAINT "scheduled_messages_sender_user_id_fkey" FOREIGN KEY ("sender_user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."sub_events"
+    ADD CONSTRAINT "sub_events_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE CASCADE;
+
+
+
+CREATE POLICY "Authenticated users can create events" ON "public"."events" FOR INSERT TO "authenticated" WITH CHECK (("host_user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Event hosts can view guest communication preferences" ON "public"."communication_preferences" FOR SELECT USING ("public"."is_event_host"("event_id"));
+
+
+
+CREATE POLICY "Only event hosts can manage guest assignments" ON "public"."guest_sub_event_assignments" USING ((EXISTS ( SELECT 1
+   FROM "public"."sub_events" "se"
+  WHERE (("se"."id" = "guest_sub_event_assignments"."sub_event_id") AND "public"."is_event_host"("se"."event_id"))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."sub_events" "se"
+  WHERE (("se"."id" = "guest_sub_event_assignments"."sub_event_id") AND "public"."is_event_host"("se"."event_id")))));
+
+
+
+CREATE POLICY "Only event hosts can manage guest list" ON "public"."event_guests" TO "authenticated" USING ("public"."is_event_host"("event_id")) WITH CHECK ("public"."is_event_host"("event_id"));
+
+
+
+CREATE POLICY "Only event hosts can manage message deliveries" ON "public"."message_deliveries" USING ((EXISTS ( SELECT 1
+   FROM "public"."scheduled_messages" "sm"
+  WHERE (("sm"."id" = "message_deliveries"."scheduled_message_id") AND "public"."is_event_host"("sm"."event_id"))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."scheduled_messages" "sm"
+  WHERE (("sm"."id" = "message_deliveries"."scheduled_message_id") AND "public"."is_event_host"("sm"."event_id")))));
+
+
+
+CREATE POLICY "Only event hosts can manage scheduled messages" ON "public"."scheduled_messages" USING ("public"."is_event_host"("event_id")) WITH CHECK ("public"."is_event_host"("event_id"));
+
+
+
+CREATE POLICY "Only event hosts can manage sub-events" ON "public"."sub_events" USING ("public"."is_event_host"("event_id")) WITH CHECK ("public"."is_event_host"("event_id"));
+
+
+
+CREATE POLICY "Only hosts can delete their events" ON "public"."events" FOR DELETE TO "authenticated" USING (("host_user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Only hosts can update their events" ON "public"."events" FOR UPDATE TO "authenticated" USING (("host_user_id" = "auth"."uid"())) WITH CHECK (("host_user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Users can delete their own media" ON "public"."media" FOR DELETE TO "authenticated" USING (("uploader_user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Users can manage their own communication preferences" ON "public"."communication_preferences" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own profile" ON "public"."users" FOR UPDATE TO "authenticated" USING (("id" = "auth"."uid"())) WITH CHECK (("id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Users can view deliveries for events they host" ON "public"."message_deliveries" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."scheduled_messages" "sm"
+  WHERE (("sm"."id" = "message_deliveries"."scheduled_message_id") AND "public"."is_event_host"("sm"."event_id")))));
+
+
+
+CREATE POLICY "Users can view guests for events they're involved in" ON "public"."event_guests" FOR SELECT TO "authenticated" USING (("public"."is_event_host"("event_id") OR ("user_id" = "auth"."uid"())));
+
+
+
+ALTER TABLE "public"."communication_preferences" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."event_guests" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."event_participants" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."events" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "events_manage_own" ON "public"."events_new" TO "authenticated" USING ("public"."is_event_host"("id"));
+
+
+
+ALTER TABLE "public"."events_new" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "events_select_accessible" ON "public"."events_new" FOR SELECT TO "authenticated" USING ((("is_public" = true) OR "public"."can_access_event"("id")));
+
+
+
+ALTER TABLE "public"."guest_sub_event_assignments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."media" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "media_insert_event_participant" ON "public"."media_new" FOR INSERT TO "authenticated" WITH CHECK ("public"."can_access_event"("event_id"));
+
+
+
+ALTER TABLE "public"."media_new" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "media_select_event_accessible" ON "public"."media_new" FOR SELECT TO "authenticated" USING ("public"."can_access_event"("event_id"));
+
+
+
+CREATE POLICY "media_update_own" ON "public"."media_new" FOR UPDATE TO "authenticated" USING (("uploader_user_id" = "auth"."uid"()));
+
+
+
+ALTER TABLE "public"."message_deliveries" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."messages" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "messages_insert_event_participant" ON "public"."messages_new" FOR INSERT TO "authenticated" WITH CHECK ("public"."can_access_event"("event_id"));
+
+
+
+ALTER TABLE "public"."messages_new" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "messages_select_event_accessible" ON "public"."messages_new" FOR SELECT TO "authenticated" USING ("public"."can_access_event"("event_id"));
+
+
+
+CREATE POLICY "participants_manage_as_host" ON "public"."event_participants" TO "authenticated" USING ("public"."is_event_host"("event_id"));
+
+
+
+CREATE POLICY "participants_select_event_related" ON "public"."event_participants" FOR SELECT TO "authenticated" USING ("public"."can_access_event"("event_id"));
+
+
+
+ALTER TABLE "public"."scheduled_messages" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."sub_events" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."users_new" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "users_select_event_related" ON "public"."users_new" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM (("public"."events_new" "e"
+     LEFT JOIN "public"."event_participants" "ep1" ON ((("ep1"."event_id" = "e"."id") AND ("ep1"."user_id" = "auth"."uid"()))))
+     LEFT JOIN "public"."event_participants" "ep2" ON ((("ep2"."event_id" = "e"."id") AND ("ep2"."user_id" = "users_new"."id"))))
+  WHERE ((("e"."host_user_id" = "auth"."uid"()) OR ("ep1"."user_id" = "auth"."uid"())) AND (("e"."host_user_id" = "users_new"."id") OR ("ep2"."user_id" = "users_new"."id"))))));
+
+
+
+CREATE POLICY "users_select_own" ON "public"."users_new" FOR SELECT TO "authenticated" USING (("id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "users_update_own" ON "public"."users_new" FOR UPDATE TO "authenticated" USING (("id" = "auth"."uid"()));
+
+
+
+
+
+ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
+
+
+
+
+
+GRANT USAGE ON SCHEMA "public" TO "postgres";
+GRANT USAGE ON SCHEMA "public" TO "anon";
+GRANT USAGE ON SCHEMA "public" TO "authenticated";
+GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRANT ALL ON FUNCTION "public"."can_access_event"("p_event_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."can_access_event"("p_event_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."can_access_event"("p_event_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."can_view_user_profile"("target_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."can_view_user_profile"("target_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."can_view_user_profile"("target_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_ready_scheduled_messages"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_ready_scheduled_messages"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_ready_scheduled_messages"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_sub_event_guests"("p_sub_event_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_sub_event_guests"("p_sub_event_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_sub_event_guests"("p_sub_event_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_event_role"("p_event_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_user_events"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_user_events"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_events"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."is_development_phone"("p_phone" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_development_phone"("p_phone" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_development_phone"("p_phone" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."is_event_host"("p_event_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_event_host"("p_event_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_event_host"("p_event_id" "uuid") TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRANT ALL ON TABLE "public"."communication_preferences" TO "anon";
+GRANT ALL ON TABLE "public"."communication_preferences" TO "authenticated";
+GRANT ALL ON TABLE "public"."communication_preferences" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."event_guests" TO "anon";
+GRANT ALL ON TABLE "public"."event_guests" TO "authenticated";
+GRANT ALL ON TABLE "public"."event_guests" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."event_participants" TO "anon";
+GRANT ALL ON TABLE "public"."event_participants" TO "authenticated";
+GRANT ALL ON TABLE "public"."event_participants" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."events" TO "anon";
+GRANT ALL ON TABLE "public"."events" TO "authenticated";
+GRANT ALL ON TABLE "public"."events" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."events_new" TO "anon";
+GRANT ALL ON TABLE "public"."events_new" TO "authenticated";
+GRANT ALL ON TABLE "public"."events_new" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."guest_sub_event_assignments" TO "anon";
+GRANT ALL ON TABLE "public"."guest_sub_event_assignments" TO "authenticated";
+GRANT ALL ON TABLE "public"."guest_sub_event_assignments" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."media" TO "anon";
+GRANT ALL ON TABLE "public"."media" TO "authenticated";
+GRANT ALL ON TABLE "public"."media" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."media_new" TO "anon";
+GRANT ALL ON TABLE "public"."media_new" TO "authenticated";
+GRANT ALL ON TABLE "public"."media_new" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."message_deliveries" TO "anon";
+GRANT ALL ON TABLE "public"."message_deliveries" TO "authenticated";
+GRANT ALL ON TABLE "public"."message_deliveries" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."messages" TO "anon";
+GRANT ALL ON TABLE "public"."messages" TO "authenticated";
+GRANT ALL ON TABLE "public"."messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."messages_new" TO "anon";
+GRANT ALL ON TABLE "public"."messages_new" TO "authenticated";
+GRANT ALL ON TABLE "public"."messages_new" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."users_new" TO "anon";
+GRANT ALL ON TABLE "public"."users_new" TO "authenticated";
+GRANT ALL ON TABLE "public"."users_new" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."public_user_profiles" TO "anon";
+GRANT ALL ON TABLE "public"."public_user_profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."public_user_profiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."scheduled_messages" TO "anon";
+GRANT ALL ON TABLE "public"."scheduled_messages" TO "authenticated";
+GRANT ALL ON TABLE "public"."scheduled_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."sub_events" TO "anon";
+GRANT ALL ON TABLE "public"."sub_events" TO "authenticated";
+GRANT ALL ON TABLE "public"."sub_events" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."users" TO "anon";
+GRANT ALL ON TABLE "public"."users" TO "authenticated";
+GRANT ALL ON TABLE "public"."users" TO "service_role";
+
+
+
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES  TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS  TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES  TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES  TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES  TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES  TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+RESET ALL;

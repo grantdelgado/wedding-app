@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { NavigationLayout } from '@/components/features/navigation';
 import { APP_CONFIG } from '@/lib/constants';
 import { Suspense } from 'react';
+import { DevToolsProvider } from '@/components/dev/TestUserCreator';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -32,7 +33,9 @@ export default function RootLayout({
                 <div className="absolute top-4 right-4 z-50">
                   <ProfileAvatar />
                 </div>
-                {children}
+                <DevToolsProvider>
+                  {children}
+                </DevToolsProvider>
               </NavigationLayout>
             </AuthSessionWatcher>
           </Suspense>

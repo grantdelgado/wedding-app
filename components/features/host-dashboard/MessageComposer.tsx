@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Database } from '@/app/reference/supabase.types'
 
-type SubEvent = Database['public']['Tables']['sub_events']['Row']
-type Guest = Database['public']['Tables']['event_guests']['Row']
+type Participant = Database['public']['Tables']['event_participants']['Row'] & {
+  users_new: {
+    full_name: string | null
+    phone: string
+    email: string | null
+  }
+}
 
 interface MessageComposerProps {
   eventId: string
-  onMessageScheduled?: () => void
+  onMessageSent?: () => void
 }
 
 interface MessagePreview {
@@ -19,460 +24,292 @@ interface MessagePreview {
   recipients: string[]
 }
 
-export function MessageComposer({ eventId, onMessageScheduled }: MessageComposerProps) {
-  const [subEvents, setSubEvents] = useState<SubEvent[]>([])
-  const [guests, setGuests] = useState<Guest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [preview, setPreview] = useState<MessagePreview>({ recipientCount: 0, recipients: [] })
-  const [previewLoading, setPreviewLoading] = useState(false)
+export function MessageComposer({ eventId, onMessageSent }: MessageComposerProps) {
+  const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState<'announcement' | 'direct'>('announcement')
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
+  const [participants, setParticipants] = useState<Participant[]>([])
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<MessagePreview | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const [formData, setFormData] = useState({
-    subject: '',
-    content: '',
-    sendNow: true,
-    scheduledDate: '',
-    scheduledTime: '',
-    targetAllGuests: true,
-    targetSubEventIds: [] as string[],
-    targetGuestTags: [] as string[],
-    targetGuestIds: [] as string[],
-    sendViaSMS: true,
-    sendViaPush: true,
-    sendViaEmail: false,
-  })
+  // Fetch participants
+  useEffect(() => {
+    async function fetchParticipants() {
+      try {
+        const { data, error } = await supabase
+          .from('event_participants')
+          .select(`
+            *,
+            users_new (
+              full_name,
+              phone,
+              email
+            )
+          `)
+          .eq('event_id', eventId)
 
-  const [availableTags, setAvailableTags] = useState<string[]>([])
-  const [showPreview, setShowPreview] = useState(false)
+        if (error) throw error
+        setParticipants(data || [])
+      } catch (err) {
+        console.error('Error fetching participants:', err)
+        setError('Failed to load participants')
+      }
+    }
 
-  const fetchData = useCallback(async () => {
+    fetchParticipants()
+  }, [eventId])
+
+  // Update preview when selections change
+  useEffect(() => {
+    let recipientCount = 0
+    let recipients: string[] = []
+
+    if (messageType === 'announcement') {
+      recipientCount = participants.length
+      recipients = participants.map(p => p.users_new?.full_name || 'Unknown').slice(0, 5)
+    } else {
+      const selectedParticipantData = participants.filter(p => selectedParticipants.includes(p.id))
+      recipientCount = selectedParticipantData.length
+      recipients = selectedParticipantData.map(p => p.users_new?.full_name || 'Unknown').slice(0, 5)
+    }
+
+    setPreview({ recipientCount, recipients })
+  }, [messageType, selectedParticipants, participants])
+
+  const handleSendMessage = useCallback(async () => {
+    if (!message.trim()) {
+      setError('Please enter a message')
+      return
+    }
+
+    if (messageType === 'direct' && selectedParticipants.length === 0) {
+      setError('Please select at least one recipient')
+      return
+    }
+
     setLoading(true)
+    setError(null)
+
     try {
-      // Fetch sub-events
-      const { data: subEventData, error: subEventError } = await supabase
-        .from('sub_events')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('sort_order')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
 
-      if (subEventError) throw subEventError
+      // Insert message into database
+      const { error: messageError } = await supabase
+        .from('messages_new')
+        .insert({
+          event_id: eventId,
+          sender_user_id: user.id,
+          content: message.trim(),
+          message_type: messageType,
+          recipients: messageType === 'direct' ? selectedParticipants : null
+        })
 
-      // Fetch guests
-      const { data: guestData, error: guestError } = await supabase
-        .from('event_guests')
-        .select('*')
-        .eq('event_id', eventId)
+      if (messageError) throw messageError
 
-      if (guestError) throw guestError
-
-      setSubEvents(subEventData || [])
-      setGuests(guestData || [])
-
-      // Extract unique tags
-      const tags = new Set<string>()
-      guestData?.forEach(guest => {
-        guest.guest_tags?.forEach(tag => tags.add(tag))
-      })
-      setAvailableTags(Array.from(tags))
-
-    } catch (error) {
-      console.error('Error fetching data:', error)
+      // Reset form
+      setMessage('')
+      setSelectedParticipants([])
+      setMessageType('announcement')
+      
+      onMessageSent?.()
+    } catch (err) {
+      console.error('Error sending message:', err)
+      setError('Failed to send message. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [eventId])
+  }, [message, messageType, selectedParticipants, eventId, onMessageSent])
 
-  const updatePreview = useCallback(async () => {
-    setPreviewLoading(true)
-    try {
-      let targetedGuests = guests
-
-      if (!formData.targetAllGuests) {
-        // Filter guests based on targeting criteria
-        targetedGuests = guests.filter(guest => {
-          // Check if guest matches any of the selected criteria
-          const matchesGuestIds = formData.targetGuestIds.length === 0 || 
-                                 formData.targetGuestIds.includes(guest.id)
-          
-          const matchesTags = formData.targetGuestTags.length === 0 ||
-                             formData.targetGuestTags.some(tag => 
-                               guest.guest_tags?.includes(tag)
-                             )
-
-          // For sub-events, we'd need to check the assignments table
-          // For now, including all if no sub-events selected
-          const matchesSubEvents = formData.targetSubEventIds.length === 0
-
-          return matchesGuestIds && matchesTags && matchesSubEvents
-        })
-      }
-
-      setPreview({
-        recipientCount: targetedGuests.length,
-        recipients: targetedGuests.map(g => g.guest_name || g.guest_email || 'Unnamed Guest').slice(0, 10)
-      })
-    } catch (error) {
-      console.error('Error updating preview:', error)
-    } finally {
-      setPreviewLoading(false)
-    }
-  }, [guests, formData])
-
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  useEffect(() => {
-    if (showPreview) {
-      updatePreview()
-    }
-  }, [showPreview, updatePreview])
-
-  const handleInputChange = (field: keyof typeof formData, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleArrayInputChange = (field: 'targetSubEventIds' | 'targetGuestTags' | 'targetGuestIds', value: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: checked 
-        ? [...prev[field], value]
-        : prev[field].filter(item => item !== value)
-    }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!formData.content.trim()) return
-
-    setSending(true)
-    try {
-      const scheduledAt = formData.sendNow 
-        ? new Date().toISOString()
-        : new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
-
-      const { error } = await supabase
-        .from('scheduled_messages')
-        .insert({
-          event_id: eventId,
-          sender_user_id: (await supabase.auth.getUser()).data.user?.id || '',
-          subject: formData.subject || null,
-          content: formData.content,
-          send_at: scheduledAt,
-          target_all_guests: formData.targetAllGuests,
-          target_sub_event_ids: formData.targetSubEventIds.length > 0 ? formData.targetSubEventIds : null,
-          target_guest_tags: formData.targetGuestTags.length > 0 ? formData.targetGuestTags : null,
-          target_guest_ids: formData.targetGuestIds.length > 0 ? formData.targetGuestIds : null,
-          send_via_sms: formData.sendViaSMS,
-          send_via_push: formData.sendViaPush,
-          send_via_email: formData.sendViaEmail,
-          status: formData.sendNow ? 'scheduled' : 'scheduled'
-        })
-
-      if (error) throw error
-
-      // Reset form
-      setFormData({
-        subject: '',
-        content: '',
-        sendNow: true,
-        scheduledDate: '',
-        scheduledTime: '',
-        targetAllGuests: true,
-        targetSubEventIds: [],
-        targetGuestTags: [],
-        targetGuestIds: [],
-        sendViaSMS: true,
-        sendViaPush: true,
-        sendViaEmail: false,
-      })
-
-      setShowPreview(false)
-      onMessageScheduled?.()
-
-    } catch (error) {
-      console.error('Error scheduling message:', error)
-    } finally {
-      setSending(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-        <div className="flex items-center justify-center py-8">
-          <LoadingSpinner />
-        </div>
-      </div>
+  const handleParticipantToggle = (participantId: string) => {
+    setSelectedParticipants(prev => 
+      prev.includes(participantId)
+        ? prev.filter(id => id !== participantId)
+        : [...prev, participantId]
     )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedParticipants.length === participants.length) {
+      setSelectedParticipants([])
+    } else {
+      setSelectedParticipants(participants.map(p => p.id))
+    }
   }
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-      <h2 className="text-xl font-semibold text-stone-800 mb-6 flex items-center">
+      <h2 className="text-xl font-semibold text-stone-800 flex items-center mb-6">
         <span className="text-2xl mr-2">💬</span>
-        Message Guests
+        Send Message
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Subject */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-2">
-            Subject (Optional)
-          </label>
-          <input
-            type="text"
-            value={formData.subject}
-            onChange={(e) => handleInputChange('subject', e.target.value)}
-            placeholder="Message subject..."
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="text-red-800">{error}</div>
         </div>
+      )}
+
+      <div className="space-y-6">
+        {/* Message Type Selection */}
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-3">
+            Message Type
+          </label>
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setMessageType('announcement')}
+              className={`flex items-center px-4 py-2 rounded-lg border transition-colors ${
+                messageType === 'announcement'
+                  ? 'bg-purple-50 border-purple-200 text-purple-700'
+                  : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              <span className="text-lg mr-2">📢</span>
+              Announcement (All Participants)
+            </button>
+            <button
+              onClick={() => setMessageType('direct')}
+              className={`flex items-center px-4 py-2 rounded-lg border transition-colors ${
+                messageType === 'direct'
+                  ? 'bg-purple-50 border-purple-200 text-purple-700'
+                  : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'
+              }`}
+            >
+              <span className="text-lg mr-2">👥</span>
+              Direct Message (Select Recipients)
+            </button>
+          </div>
+        </div>
+
+        {/* Recipient Selection for Direct Messages */}
+        {messageType === 'direct' && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-stone-700">
+                Select Recipients ({selectedParticipants.length} selected)
+              </label>
+              <Button
+                onClick={handleSelectAll}
+                variant="outline"
+                size="sm"
+              >
+                {selectedParticipants.length === participants.length ? 'Deselect All' : 'Select All'}
+              </Button>
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto border border-stone-200 rounded-lg">
+              {participants.length === 0 ? (
+                <div className="p-4 text-center text-stone-500">
+                  No participants found
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-200">
+                  {participants.map((participant) => (
+                    <label
+                      key={participant.id}
+                      className="flex items-center p-3 hover:bg-stone-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipants.includes(participant.id)}
+                        onChange={() => handleParticipantToggle(participant.id)}
+                        className="rounded border-stone-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <div className="ml-3">
+                        <div className="font-medium text-stone-800">
+                          {participant.users_new?.full_name || 'Unknown'}
+                        </div>
+                        {participant.users_new?.phone && (
+                          <div className="text-sm text-stone-500">
+                            {participant.users_new.phone}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Message Content */}
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-2">
-            Message Content *
+            Message
           </label>
           <textarea
-            value={formData.content}
-            onChange={(e) => handleInputChange('content', e.target.value)}
-            placeholder="Write your message to guests..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Enter your message here..."
             rows={4}
-            required
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
           />
-          <p className="text-xs text-stone-500 mt-1">
-            {formData.content.length} characters
-          </p>
-        </div>
-
-        {/* Scheduling */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-3">
-            When to Send
-          </label>
-          <div className="space-y-3">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="sendTiming"
-                checked={formData.sendNow}
-                onChange={() => handleInputChange('sendNow', true)}
-                className="mr-2 text-purple-600 focus:ring-purple-500"
-              />
-              Send immediately
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="sendTiming"
-                checked={!formData.sendNow}
-                onChange={() => handleInputChange('sendNow', false)}
-                className="mr-2 text-purple-600 focus:ring-purple-500"
-              />
-              Schedule for later
-            </label>
-            
-            {!formData.sendNow && (
-              <div className="ml-6 grid grid-cols-2 gap-3">
-                <div>
-                  <input
-                    type="date"
-                    value={formData.scheduledDate}
-                    onChange={(e) => handleInputChange('scheduledDate', e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    required={!formData.sendNow}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="time"
-                    value={formData.scheduledTime}
-                    onChange={(e) => handleInputChange('scheduledTime', e.target.value)}
-                    required={!formData.sendNow}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            )}
+          <div className="text-xs text-stone-500 mt-1">
+            {message.length}/1000 characters
           </div>
         </div>
 
-        {/* Target Audience */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-3">
-            Who to Send To
-          </label>
-          <div className="space-y-3">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="targetAudience"
-                checked={formData.targetAllGuests}
-                onChange={() => handleInputChange('targetAllGuests', true)}
-                className="mr-2 text-purple-600 focus:ring-purple-500"
-              />
-              All guests
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="targetAudience"
-                checked={!formData.targetAllGuests}
-                onChange={() => handleInputChange('targetAllGuests', false)}
-                className="mr-2 text-purple-600 focus:ring-purple-500"
-              />
-              Specific groups
-            </label>
-
-            {!formData.targetAllGuests && (
-              <div className="ml-6 space-y-4">
-                {/* Sub-events targeting */}
-                {subEvents.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-stone-700 mb-2">Events</h4>
-                    <div className="space-y-2">
-                      {subEvents.map(subEvent => (
-                        <label key={subEvent.id} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.targetSubEventIds.includes(subEvent.id)}
-                            onChange={(e) => handleArrayInputChange('targetSubEventIds', subEvent.id, e.target.checked)}
-                            className="mr-2 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          {subEvent.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Tags targeting */}
-                {availableTags.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-stone-700 mb-2">Guest Tags</h4>
-                    <div className="space-y-2">
-                      {availableTags.map(tag => (
-                        <label key={tag} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.targetGuestTags.includes(tag)}
-                            onChange={(e) => handleArrayInputChange('targetGuestTags', tag, e.target.checked)}
-                            className="mr-2 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          {tag}
-                        </label>
-                      ))}
-                    </div>
+        {/* Message Preview */}
+        {preview && (
+          <div className="bg-stone-50 rounded-lg p-4">
+            <h3 className="font-medium text-stone-800 mb-2">
+              📋 Message Preview
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-stone-600">Type:</span>{' '}
+                <span className="font-medium">
+                  {messageType === 'announcement' ? 'Announcement' : 'Direct Message'}
+                </span>
+              </div>
+              <div>
+                <span className="text-stone-600">Recipients:</span>{' '}
+                <span className="font-medium">{preview.recipientCount}</span>
+                {preview.recipients.length > 0 && (
+                  <div className="mt-1 text-xs text-stone-500">
+                    {preview.recipients.join(', ')}
+                    {preview.recipientCount > preview.recipients.length && 
+                      ` and ${preview.recipientCount - preview.recipients.length} more...`
+                    }
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Delivery Channels */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-3">
-            How to Send
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={formData.sendViaSMS}
-                onChange={(e) => handleInputChange('sendViaSMS', e.target.checked)}
-                className="mr-2 rounded text-purple-600 focus:ring-purple-500"
-              />
-              📱 SMS (recommended)
-            </label>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={formData.sendViaPush}
-                onChange={(e) => handleInputChange('sendViaPush', e.target.checked)}
-                className="mr-2 rounded text-purple-600 focus:ring-purple-500"
-              />
-              🔔 Push notifications (for app users)
-            </label>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={formData.sendViaEmail}
-                onChange={(e) => handleInputChange('sendViaEmail', e.target.checked)}
-                className="mr-2 rounded text-purple-600 focus:ring-purple-500"
-              />
-              📧 Email
-            </label>
-          </div>
-        </div>
-
-        {/* Preview */}
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-stone-700">Message Preview</h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              {showPreview ? 'Hide Preview' : 'Show Preview'}
-            </Button>
-          </div>
-
-          {showPreview && (
-            <div className="bg-stone-50 rounded-lg p-4">
-              {previewLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <LoadingSpinner />
-                </div>
-              ) : preview ? (
+              {message.trim() && (
                 <div>
-                  <p className="font-medium text-stone-700 mb-2">
-                    This message will be sent to {preview.recipientCount} guest{preview.recipientCount !== 1 ? 's' : ''}
-                  </p>
-                  {preview.recipients.length > 0 && (
-                    <div>
-                      <p className="text-sm text-stone-600 mb-1">Recipients include:</p>
-                      <p className="text-sm text-stone-500">
-                        {preview.recipients.join(', ')}
-                        {preview.recipientCount > 10 && ` and ${preview.recipientCount - 10} more...`}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {formData.content && (
-                    <div className="mt-4 p-3 bg-white rounded border">
-                      <p className="text-sm font-medium text-stone-700 mb-1">Message:</p>
-                      <p className="text-sm text-stone-600">{formData.content}</p>
-                    </div>
-                  )}
+                  <span className="text-stone-600">Message:</span>
+                  <div className="mt-1 p-2 bg-white rounded border text-sm">
+                    {message.trim()}
+                  </div>
                 </div>
-              ) : null}
+              )}
             </div>
-          )}
-        </div>
-
-        {/* Submit */}
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-stone-500">
-              {formData.sendNow ? 'Message will be sent immediately' : 'Message will be scheduled'}
-            </p>
-            <Button
-              type="submit"
-              disabled={sending || !formData.content.trim()}
-              className="min-w-[120px]"
-            >
-              {sending ? <LoadingSpinner /> : formData.sendNow ? 'Send Now' : 'Schedule Message'}
-            </Button>
           </div>
+        )}
+
+        {/* Send Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSendMessage}
+            disabled={loading || !message.trim() || (messageType === 'direct' && selectedParticipants.length === 0)}
+            className="flex items-center"
+          >
+            {loading ? (
+              <>
+                <LoadingSpinner className="mr-2" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <span className="mr-2">📨</span>
+                Send Message
+              </>
+            )}
+          </Button>
         </div>
-      </form>
+      </div>
     </div>
   )
 } 

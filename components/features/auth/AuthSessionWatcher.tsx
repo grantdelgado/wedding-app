@@ -9,40 +9,83 @@ export default function AuthSessionWatcher({ children }: { children: React.React
   const pathname = usePathname()
 
   useEffect(() => {
-    // Only redirect if NOT on /reset-password (with or without query params), /login, or /profile
-    // or any paths under /host (which are for authenticated hosts)
-    // or any paths under /guest (which are for authenticated guests)
-    // or on /select-event (which is the target page)
-    if (
-      pathname.startsWith('/reset-password') ||
-      pathname === '/login' ||
-      pathname === '/profile' ||
-      pathname === '/select-event' ||
-      pathname.startsWith('/host/') ||
-      pathname.startsWith('/guest/')
-    ) return;
+    // Skip auth handling for specific routes that don't require redirects
+    const skipAuthRoutes = [
+      '/reset-password',
+      '/login',
+      '/profile',
+      '/select-event',
+      // Allow all host and guest routes through (they'll handle their own auth)
+      '/host/',
+      '/guest/'
+    ]
+
+    const shouldSkipAuth = skipAuthRoutes.some(route => 
+      pathname === route || pathname.startsWith(route)
+    )
+
+    if (shouldSkipAuth) return
 
     const init = async () => {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
 
-      if (sessionError) {
-        console.error('❌ Error fetching session:', sessionError)
-        return
+        if (sessionError) {
+          console.error('❌ Error fetching session:', sessionError)
+          return
+        }
+
+        if (!session?.user) {
+          // No session - redirect to login unless already there
+          if (pathname !== '/login') {
+            router.push('/login')
+          }
+          return
+        }
+
+        // User is authenticated - ensure they have a profile
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users_new')
+          .select('id, phone, full_name')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profileError || !userProfile) {
+          console.log('User profile not found, will be created by trigger or needs manual creation')
+          // The database trigger should handle profile creation
+          // If it doesn't exist, it will be created on first profile access
+        }
+
+        // Redirect authenticated users to event selection page
+        // This allows them to choose which event to access and see their role per event
+        if (pathname === '/' || pathname === '/login') {
+          router.push('/select-event')
+        }
+
+      } catch (error) {
+        console.error('Unexpected error in auth session watcher:', error)
       }
-
-      if (!session?.user) {
-        return
-      }
-
-      // ✅ Auth session is valid — user creation/upsert is now handled by a Supabase trigger or Edge Function
-
-      router.push('/select-event')
     }
 
     init()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          // User just signed in - redirect to event selection
+          router.push('/select-event')
+        } else if (event === 'SIGNED_OUT') {
+          // User signed out - redirect to login
+          router.push('/login')
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [router, pathname])
 
   return <>{children}</>
