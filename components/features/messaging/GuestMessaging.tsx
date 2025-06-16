@@ -174,7 +174,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
                 key={message.id}
                 className={`flex ${isOwnMessage && !isAnnouncement ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${getMessageTypeStyle(message.message_type, isOwnMessage)}`}>
+                <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${getMessageTypeStyle(message.message_type || 'direct', isOwnMessage)}`}>
                   {!isOwnMessage && (
                     <div className="flex items-center mb-1">
                       <span className="text-xs font-medium text-stone-600">
@@ -184,7 +184,7 @@ export default function GuestMessaging({ eventId, currentUserId }: GuestMessagin
                   )}
                   <p className="text-sm leading-relaxed">{message.content}</p>
                   <p className={`text-xs mt-2 ${isOwnMessage ? 'text-stone-300' : 'text-stone-500'}`}>
-                    {formatMessageTime(message.created_at)}
+                    {message.created_at ? formatMessageTime(message.created_at) : 'Unknown time'}
                   </p>
                 </div>
               </div>

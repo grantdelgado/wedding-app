@@ -89,7 +89,7 @@ export function BottomNavigation({ eventId, role, className }: BottomNavigationP
 
           if (guestEvent) {
             setUserRole('guest')
-            const event = guestEvent.event as { title: string } | null
+            const event = guestEvent.event as unknown as { title: string } | null
             setEventTitle(event?.title || '')
           }
         }
@@ -206,11 +206,12 @@ export function BottomNavigation({ eventId, role, className }: BottomNavigationP
           
           <div className="flex items-center space-x-2">
             {/* Role Switcher */}
-            <RoleSwitcher 
-              currentEventId={eventId}
-              currentRole={userRole}
-              className="shrink-0"
-            />
+                        <div className="shrink-0">
+              <RoleSwitcher
+                currentEventId={eventId}
+                currentRole={userRole}
+              />
+            </div>
             
             {/* Mode indicator icon */}
             <div className="text-white/60 text-sm">

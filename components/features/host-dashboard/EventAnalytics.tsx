@@ -108,7 +108,9 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
         content: `New ${m.media_type} uploaded${m.caption ? `: ${m.caption.substring(0, 30)}...` : ''}`,
         timestamp: m.created_at
       }))
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10)
+    ].filter(activity => activity.timestamp)
+     .sort((a, b) => new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime())
+     .slice(0, 10)
 
     return {
       rsvpStats,
@@ -262,7 +264,7 @@ export function EventAnalytics({ eventId }: EventAnalyticsProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-stone-800 truncate">{activity.content}</p>
                   <p className="text-xs text-stone-500">
-                    {new Date(activity.timestamp).toLocaleString()}
+                    {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : 'Unknown time'}
                   </p>
                 </div>
               </div>

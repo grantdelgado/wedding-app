@@ -4,7 +4,7 @@ import type { EventInsert, EventUpdate } from './types'
 // Database helpers for events
 export const createEvent = async (eventData: EventInsert) => {
   return await supabase
-    .from('events')
+    .from('events_new')
     .insert(eventData)
     .select()
     .single()
@@ -12,7 +12,7 @@ export const createEvent = async (eventData: EventInsert) => {
 
 export const updateEvent = async (eventId: string, eventData: EventUpdate) => {
   return await supabase
-    .from('events')
+    .from('events_new')
     .update(eventData)
     .eq('id', eventId)
     .select()
@@ -21,10 +21,10 @@ export const updateEvent = async (eventId: string, eventData: EventUpdate) => {
 
 export const getEventWithHost = async (eventId: string) => {
   return await supabase
-    .from('events')
+    .from('events_new')
     .select(`
       *,
-      host:public_user_profiles!events_host_user_id_fkey(*)
+      host:users_new!events_new_host_user_id_fkey(*)
     `)
     .eq('id', eventId)
     .single()
@@ -39,8 +39,16 @@ export const isEventHost = async (eventId: string) => {
 }
 
 export const isEventGuest = async (eventId: string) => {
-  const { data, error } = await supabase
-    .rpc('is_event_guest', { p_event_id: eventId })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { isGuest: false, error: null }
   
-  return { isGuest: data, error }
+  const { data, error } = await supabase
+    .from('event_participants')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('user_id', user.id)
+    .eq('role', 'guest')
+    .single()
+  
+  return { isGuest: !!data, error }
 } 

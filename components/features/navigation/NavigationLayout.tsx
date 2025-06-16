@@ -25,8 +25,8 @@ export function NavigationLayout({ children, className }: NavigationLayoutProps)
       </div>
 
       {/* Bottom Navigation */}
-      {!isLoading && eventId && (
-        <BottomNavigation eventId={eventId} />
+      {!isLoading && eventId && userRole && (
+        <BottomNavigation eventId={eventId} role={userRole} />
       )}
     </div>
   )

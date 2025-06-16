@@ -18,7 +18,7 @@ interface NotificationItem {
   type: 'rsvp' | 'media' | 'message' | 'general'
   title: string
   description: string
-  timestamp: string
+  timestamp: string | null
   isRead: boolean
   icon: string
   color: string
@@ -45,7 +45,7 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
 
       // Process guest updates (RSVP changes) - using hook data
       guests?.forEach((guest) => {
-        if (guest.rsvp_status && guest.updated_at > dayAgo.toISOString()) {
+        if (guest.rsvp_status && guest.updated_at && guest.updated_at > dayAgo.toISOString()) {
           notificationItems.push({
             id: `guest-${guest.id}`,
             type: 'rsvp',
@@ -61,7 +61,7 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
 
       // Process media uploads - using hook data
       media?.forEach((mediaItem) => {
-        if (mediaItem.created_at > dayAgo.toISOString()) {
+        if (mediaItem.created_at && mediaItem.created_at > dayAgo.toISOString()) {
           const uploaderName = mediaItem.uploader?.full_name || 'A guest'
           notificationItems.push({
             id: `media-${mediaItem.id}`,
@@ -93,8 +93,12 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
         }
       })
 
-      // Sort by timestamp
-      notificationItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      // Sort by timestamp, handling null values
+      notificationItems.sort((a, b) => {
+        if (!a.timestamp) return 1
+        if (!b.timestamp) return -1
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      })
 
       setNotifications(notificationItems.slice(0, 20)) // Keep last 20 notifications
       setUnreadCount(notificationItems.length)
@@ -253,7 +257,7 @@ export function NotificationCenter({ eventId }: NotificationCenterProps) {
                             {notification.title}
                           </h4>
                           <div className="text-xs text-stone-400">
-                            {formatRelativeTime(notification.timestamp)}
+                            {notification.timestamp ? formatRelativeTime(notification.timestamp) : 'Unknown time'}
                           </div>
                         </div>
                         <p className="text-sm text-stone-600 mt-1 line-clamp-2">

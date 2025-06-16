@@ -2,28 +2,13 @@
 
 import React, { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/Button'
-import { FileUpload } from './FileUpload'
-import { ColumnMapping } from './ColumnMapping'
-import { ImportPreview } from './ImportPreview'
-import { 
-  parseCSVFile, 
-  parseExcelFile, 
-  autoDetectColumnMapping,
-  validateImportedGuests,
-  convertToEventGuests,
-  generateSampleCSV,
-  type ParsedFileResult,
-  type ColumnMappingType,
-  type ImportValidationResult,
-  type GuestImportData
-} from '@/lib/guest-import'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 interface GuestImportWizardProps {
   eventId: string
-  onComplete?: () => void
-  onCancel?: () => void
+  onClose: () => void
+  onImportComplete: () => void
 }
 
 interface GuestEntry {
@@ -34,7 +19,11 @@ interface GuestEntry {
   notes?: string
 }
 
-export function GuestImportWizard({ eventId, onComplete, onCancel }: GuestImportWizardProps) {
+export function GuestImportWizard({
+  eventId,
+  onClose,
+  onImportComplete
+}: GuestImportWizardProps) {
   const [step, setStep] = useState<'method' | 'manual' | 'csv' | 'processing'>('method')
   const [guests, setGuests] = useState<GuestEntry[]>([])
   const [loading, setLoading] = useState(false)
@@ -120,14 +109,14 @@ export function GuestImportWizard({ eventId, onComplete, onCancel }: GuestImport
         }
       }
 
-      onComplete?.()
+      onImportComplete()
     } catch (err) {
       console.error('Error processing guests:', err)
       setError('Failed to import guests. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [guests, eventId, onComplete])
+  }, [guests, eventId, onImportComplete])
 
   const validateGuest = (guest: GuestEntry): boolean => {
     return guest.fullName.trim().length > 0 && guest.phone.trim().length > 0
@@ -284,7 +273,7 @@ export function GuestImportWizard({ eventId, onComplete, onCancel }: GuestImport
               {validGuests.length} of {guests.length} guests are valid
             </div>
             <div className="flex space-x-3">
-              <Button onClick={onCancel} variant="outline">
+              <Button onClick={onClose} variant="outline">
                 Cancel
               </Button>
               <Button 
@@ -324,7 +313,7 @@ export function GuestImportWizard({ eventId, onComplete, onCancel }: GuestImport
             <Button onClick={() => setStep('method')} variant="outline">
               Back to Options
             </Button>
-            <Button onClick={onCancel} variant="outline">
+            <Button onClick={onClose} variant="outline">
               Cancel
             </Button>
           </div>

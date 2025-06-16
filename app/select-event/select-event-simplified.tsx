@@ -3,20 +3,20 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+// import type { User } from '@supabase/supabase-js' // Not needed
 
 interface UserEvent {
   event_id: string
   title: string
   event_date: string
   location: string | null
-  user_role: 'host' | 'guest'
+  user_role: string | null
   rsvp_status: string | null
   is_primary_host: boolean
 }
 
 export default function SimplifiedEventSelectionPage() {
-  const [user, setUser] = useState<User | null>(null)
+  // const [user, setUser] = useState<User | null>(null) // Removed as not needed
   const [events, setEvents] = useState<UserEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +33,7 @@ export default function SimplifiedEventSelectionPage() {
           return
         }
         
-        setUser(user)
+        // setUser(user) // Not needed as we only check authentication
 
         // Get user's events with roles using the simplified function
         const { data: userEvents, error: eventsError } = await supabase
@@ -61,8 +61,10 @@ export default function SimplifiedEventSelectionPage() {
     // Simple role-based routing
     if (event.user_role === 'host') {
       router.push(`/host/events/${event.event_id}/dashboard`)
-    } else {
+    } else if (event.user_role === 'guest') {
       router.push(`/guest/events/${event.event_id}/home`)
+    } else {
+      setError('Unable to determine your role for this event.')
     }
   }
 

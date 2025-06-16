@@ -64,7 +64,7 @@ export default function EditEventPage() {
         }
 
         const { data: eventData, error: eventError } = await supabase
-          .from('events')
+          .from('events_new')
           .select('*')
           .eq('id', eventId)
           .eq('host_user_id', session.user.id)
@@ -286,7 +286,7 @@ export default function EditEventPage() {
       }
 
       const { data: updatedEvent, error: updateError } = await supabase
-        .from('events')
+        .from('events_new')
         .update(eventData)
         .eq('id', eventId)
         .select()

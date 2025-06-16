@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Verify user is the host of this event
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .from('events_new')
       .select('host_user_id')
       .eq('id', eventId)
       .eq('host_user_id', user.id)

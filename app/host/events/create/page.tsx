@@ -194,7 +194,7 @@ export default function CreateEventPage() {
       }
 
       const { data: newEvent, error: insertError } = await supabase
-        .from('events')
+        .from('events_new')
         .insert(eventData)
         .select()
         .single()

@@ -24,20 +24,20 @@ interface CreateUserResponse {
 }
 
 export function TestUserCreator() {
-  if (!isDevelopment) return null
-
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [users, setUsers] = useState<TestUser[]>([])
   const [showUsers, setShowUsers] = useState(false)
-
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     role: 'guest' as 'host' | 'guest' | 'admin',
     phone: ''
   })
+
+  // Early return after all hooks are declared
+  if (!isDevelopment) return null
 
   const createUser = async () => {
     if (!formData.name || !formData.email) {
@@ -225,7 +225,7 @@ export function TestUserCreator() {
           <div className="flex gap-2">
             <select
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value as 'host' | 'guest' | 'admin' })}
               className="flex-1 px-2 py-1 border border-stone-300 rounded text-sm"
               disabled={loading}
             >

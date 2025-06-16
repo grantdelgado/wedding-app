@@ -31,7 +31,7 @@ export default function ProfilePage() {
       
       // Check if user has hosted events
       const { data: hostedEvents } = await supabase
-        .from('events')
+        .from('events_new')
         .select('id')
         .eq('host_user_id', user.id)
       

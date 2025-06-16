@@ -178,11 +178,11 @@ export default function EventDashboardPage() {
           <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <GuestImportWizard
               eventId={eventId}
-              onComplete={() => {
+              onImportComplete={() => {
                 setShowGuestImport(false)
                 handleDataRefresh()
               }}
-              onCancel={() => setShowGuestImport(false)}
+              onClose={() => setShowGuestImport(false)}
             />
           </div>
         </div>

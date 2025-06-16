@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+// import { useRouter } from 'next/navigation' // AuthSessionWatcher handles redirects
 
 // Simplified development phone patterns
 const DEV_PHONES = {
@@ -19,7 +19,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<'phone' | 'verify' | 'dev-select'>('phone')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const router = useRouter()
+  // const router = useRouter() // AuthSessionWatcher handles redirects
 
   // Clean phone number input
   const cleanPhoneNumber = (input: string): string => {
@@ -42,14 +42,14 @@ export default function LoginPage() {
       // Create deterministic password for consistent sessions
       const password = `dev-${devPhone.slice(-4)}-${Date.now().toString().slice(-6)}`
       
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: `${devPhone.replace(/\D/g, '')}@dev.unveil.app`,
         password: password
       })
       
       if (error) {
         // If user doesn't exist, create them
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
           email: `${devPhone.replace(/\D/g, '')}@dev.unveil.app`,
           password: password,
           options: {
@@ -68,9 +68,9 @@ export default function LoginPage() {
       
       // AuthSessionWatcher will handle redirect to /select-event
       
-    } catch (err) {
-      console.error('Dev login error:', err)
-      setMessage(`Failed to sign in: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } catch (error) {
+      console.error('Dev login error:', error)
+      setMessage(`Failed to sign in: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
     
     setLoading(false)
@@ -114,7 +114,8 @@ export default function LoginPage() {
         setMessage('Verification code sent!')
         setStep('verify')
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('SMS error:', error)
       setMessage('Network error. Please try again.')
     }
     
@@ -141,7 +142,8 @@ export default function LoginPage() {
         setMessage('Phone verified successfully!')
         // AuthSessionWatcher handles redirect
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('OTP verification error:', error)
       setMessage('Verification failed. Please try again.')
     }
     

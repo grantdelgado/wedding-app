@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/app/reference/supabase.types'
 
-// Only allow in development
-if (process.env.NODE_ENV === 'production') {
-  throw new Error('Admin API routes are not available in production')
-}
-
-const supabaseAdmin = createClient<Database>(
+// Create admin client only if needed (will be called conditionally)
+const getSupabaseAdmin = () => createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -21,12 +17,12 @@ interface CreateUserRequest {
   role: 'host' | 'guest' | 'admin'
   phone?: string
   avatar?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Double-check environment
+    // Environment guard - return early for production builds
     if (process.env.NODE_ENV !== 'development') {
       return NextResponse.json(
         { error: 'Admin API only available in development' }, 
@@ -64,6 +60,7 @@ export async function POST(request: NextRequest) {
     const password = `test-${body.role}-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`
     
     // Create Supabase Auth user
+    const supabaseAdmin = getSupabaseAdmin()
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: body.email,
       password,
@@ -98,7 +95,7 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 200))
 
     // Verify user profile exists
-    const { data: userProfile, error: profileError } = await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('id', authData.user.id)
@@ -156,14 +153,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
+  // Environment guard - return early for production builds
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json(
+      { error: 'Admin API only available in development' }, 
+      { status: 403 }
+    )
+  }
+  
   try {
-    if (process.env.NODE_ENV !== 'development') {
-      return NextResponse.json(
-        { error: 'Admin API only available in development' }, 
-        { status: 403 }
-      )
-    }
+    const supabaseAdmin = getSupabaseAdmin()
 
     // List test users
     const { data: users, error } = await supabaseAdmin
@@ -196,13 +196,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  // Environment guard - return early for production builds
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json(
+      { error: 'Admin API only available in development' }, 
+      { status: 403 }
+    )
+  }
+
   try {
-    if (process.env.NODE_ENV !== 'development') {
-      return NextResponse.json(
-        { error: 'Admin API only available in development' }, 
-        { status: 403 }
-      )
-    }
+    const supabaseAdmin = getSupabaseAdmin()
 
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
@@ -233,7 +236,8 @@ export async function DELETE(request: NextRequest) {
           } else {
             deletedUsers.push(user.email)
           }
-        } catch (error) {
+        } catch (userError) {
+          console.error('Error deleting user:', userError)
           errors.push(`${user.email}: Unexpected error`)
         }
       }
@@ -268,8 +272,8 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-  } catch (error) {
-    console.error('Error deleting test users:', error)
+  } catch (deleteError) {
+    console.error('Error deleting test users:', deleteError)
     return NextResponse.json(
       { error: 'Internal server error' }, 
       { status: 500 }
